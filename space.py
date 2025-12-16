@@ -76,27 +76,21 @@ def show_game_over(surface, final_score):
                 if event.key == pygame.K_SPACE:
                     waiting = False
 
-def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large):
+def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, spaceship_img):
     surface.fill(BLACK)
     surface.blit(background_img, (0,0))
     
-   
-    for block in blocks:
-        x_pos, y_pos, size = block[0], block[1], block[2]
-
-        if size < 40:
-            chosen_img = img_small
-        elif size < 50:
-            chosen_img = img_medium
-        else:
-            chosen_img = img_large
     
-        scaled_meteor = pygame.transform.scale(chosen_img, (size, size))
-        surface.blit(scaled_meteor, (x_pos, y_pos))
-
+    for block in blocks:
+        pygame.draw.rect(surface, RED, (block[0], block[1], block[2], block[2]))
 
     if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
-        pygame.draw.circle(surface, BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
+        if spaceship_img:
+            draw_x = int(player_x - PLAYER_RADIUS)
+            draw_y = int(player_y - PLAYER_RADIUS)
+            surface.blit(spaceship_img, (draw_x, draw_y))
+        else:
+            pygame.draw.circle(surface, BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
     
     
     
@@ -120,15 +114,16 @@ def main():
     background_image = pygame.image.load("images/galaxy.png").convert()
     background_image = pygame.transform.scale(background_image, SCREEN_SIZE)
 
-    meteor_small = pygame.image.load("images/meteoriet2.png").convert()
-    meteor_medium = pygame.image.load("images/mars.png").convert()
-    meteor_large = pygame.image.load("images/jupiter.png").convert()
-
-
     
     heart_image = pygame.image.load("images/lives.png").convert_alpha()
     heart_image = pygame.transform.scale(heart_image, (30, 30))
 
+    try:
+        spaceship_image = pygame.image.load("images/spaceshipp.png").convert_alpha()
+        spaceship_image = pygame.transform.scale(spaceship_image, (PLAYER_RADIUS * 2, PLAYER_RADIUS * 2))
+    except pygame.error:
+        spaceship_image = None
+    
     
     x = SCREEN_SIZE[0] // 2
     y = SCREEN_SIZE[1] - 100
@@ -187,26 +182,27 @@ def main():
         for block in blocks:
             block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
             
-            if player_rect.colliderect(block_rect) and immunity_timer == 0:                
+            if player_rect.colliderect(block_rect) and immunity_timer == 0: 
                 lives -= 1
-                render_frame(surface, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large)
+                render_frame(surface, blocks, x, y, score, heart_image, lives, 1, background_image, spaceship_image)
                 pygame.time.delay(300)
                 immunity_timer = 90
                 
                 if lives <= 0:
                     show_game_over(surface, score) 
-                    lives = 3  
+                    lives = 3 
                     score = 0
                     fall_speed = START_SPEED
-              
+                
                     x = SCREEN_SIZE[0] // 2
                     y = SCREEN_SIZE[1] - 100
                     x_velocity = 0
+                    y_velocity = 0
                     blocks = create_blocks()
                 break 
 
         
-        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large)
+        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, spaceship_image)
 
     pygame.quit()
     sys.exit()
