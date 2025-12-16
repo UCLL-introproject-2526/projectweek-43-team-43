@@ -32,15 +32,17 @@ def create_main_surface(screen_size):
 def create_blocks():
     blocks = []
     for _ in range(BLOCK_COUNT):
+        size = random.randint(20,60)
         x = random.randint(0, SCREEN_SIZE[0] - BLOCK_SIZE)
         y = random.randint(-SCREEN_SIZE[1], 0)
-        blocks.append([x, y])
+        blocks.append([x, y, size])
     return blocks
 
 def update_blocks(blocks, fall_speed):
     for block in blocks:
         block[1] += fall_speed
         if block[1] > SCREEN_SIZE[1]:
+            block[2] = random.randint(20, 60)
             block[1] = random.randint(-150, 0)
             block[0] = random.randint(0, SCREEN_SIZE[0] - BLOCK_SIZE)
 
@@ -81,7 +83,7 @@ def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, 
     
    
     for block in blocks:
-        pygame.draw.rect(surface, RED, (block[0], block[1], BLOCK_SIZE, BLOCK_SIZE))
+        pygame.draw.rect(surface, RED, (block[0], block[1], block[2], block[2]))
 
     if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
         pygame.draw.circle(surface, BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
@@ -168,7 +170,7 @@ def main():
         player_rect = pygame.Rect(x - PLAYER_RADIUS, y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
         
         for block in blocks:
-            block_rect = pygame.Rect(block[0], block[1], BLOCK_SIZE, BLOCK_SIZE)
+            block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
             
             if player_rect.colliderect(block_rect) and immunity_timer == 0:                
                 lives -= 1
