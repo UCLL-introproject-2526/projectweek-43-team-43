@@ -3,7 +3,6 @@ import pygame.freetype
 from enum import Enum
 from pygame.sprite import Sprite, RenderUpdates
 
-GREEN = (0, 255, 0)
 BLUE = (106, 159, 181)
 WHITE = (255, 255, 255)
 RED = (255, 0 , 0)
@@ -37,6 +36,7 @@ class UIElement(Sprite):
             default_image.get_rect(center=center_position),
             highlighted_image.get_rect(center=center_position),
         ]
+
     def image(self):
         return self.images[1] if self.mouse_over else self.images[0]
 
@@ -76,8 +76,9 @@ def game_loop(screen, buttons):
 
         pygame.display.flip()
 
+
 def title_screen(screen):
-    # Het midden van de breedte van het scherm is nu 512 (1024 / 2), in een ander geval is gwn hetzelfde principe
+    # Het midden van de breedte is nu 512 (1024 / 2), zelfde principe bij andere breedte
     start_btn = UIElement(
         center_position=(512, 350), 
         font_size=30,
@@ -102,7 +103,7 @@ def play_level(screen):
         font_size=20,
         bg_rgb=BLUE,
         text_rgb=WHITE,
-        text="(Hier zou de gameplay moeten komen)",
+        text="(Hier is de gameplay - 1024x768)",
         action=None,
     )
     
