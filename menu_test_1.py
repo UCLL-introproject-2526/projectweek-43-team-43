@@ -24,7 +24,15 @@ class GameState(Enum):
     PLAYING = 1
     GAMEOVER = 2
     OPTIONS = 3
+    VIDEO_SETTINGS = 4
+    SOUND = 5
     CONTROLS = 6
+
+
+pygame.mixer.init()
+pygame.mixer.music.load("./audio/music.mp3")
+pygame.mixer.music.play(-1)
+
 
 def create_surface_with_text(text, font_size, text_rgb, bg_rgb):
     """ Hulpfunctie om tekst om te zetten in een plaatje """
@@ -155,8 +163,8 @@ def options_screen(screen):
         font_size=50,
         bg_rgb=BLUE,
         text_rgb=WHITE,
-        text="Sound: ON",
-        action=None,
+        text="Sound",
+        action=GameState.SOUND,
     )
 
     controls_button = UIElement(
@@ -342,6 +350,45 @@ def game_over_screen(screen):
     return game_loop(screen, RenderUpdates(tekst_btn, restart_btn, menu_btn))
 
 
+def sound_screen(screen):
+    TITLE = UIElement(
+        center_position=(CENTER_X, 100),
+        font_size=50,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="SOUNDS",
+        action=None,
+    )
+    
+    music_btn = UIElement(
+        center_position=(CENTER_X, 300),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="Muziek: On/Off",
+        action=None,
+    )
+
+    effects_btn = UIElement(
+        center_position=(CENTER_X, 400),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="Effects: On/Off",
+        action=None,
+    )
+
+    back_btn = UIElement(
+        center_position=(CENTER_X, 600),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="Back to Options",
+        action=GameState.OPTIONS,
+    )
+
+    return game_loop(screen, RenderUpdates(TITLE, music_btn, effects_btn, back_btn))
+
 def main():
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -364,6 +411,9 @@ def main():
         
         if game_state == GameState.CONTROLS:
             game_state = control_screen(screen)
+
+        if game_state == GameState.SOUND:
+            game_state = sound_screen(screen)
         
         if game_state == GameState.QUIT:
             pygame.quit()
