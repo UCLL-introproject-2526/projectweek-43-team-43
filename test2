@@ -16,7 +16,7 @@ BLOCK_SIZE = 25
 BLOCK_COUNT = 15
 PLAYER_RADIUS = 20
 
-MOVEMENT_SPEED = 7
+MOVEMENT_SPEED = 2
 START_SPEED = 3
 SPEED_INCREASE = 0.002
 MAX_SPEED = 12
@@ -75,8 +75,9 @@ def show_game_over(surface, final_score):
                 if event.key == pygame.K_SPACE:
                     waiting = False
 
-def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer):
+def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img):
     surface.fill(BLACK)
+    surface.blit(background_img, (0,0))
     
    
     for block in blocks:
@@ -103,6 +104,9 @@ def main():
     surface = create_main_surface(SCREEN_SIZE)
     pygame.display.set_caption("Ontwijk de blokken!")
     clock = pygame.time.Clock()
+
+    background_image = pygame.image.load("images/galaxy.png").convert()
+    background_image = pygame.transform.scale(background_image, SCREEN_SIZE)
 
     
     heart_image = pygame.image.load("16_dec_2025__13_11_31-removebg-preview.png").convert_alpha()
@@ -168,7 +172,7 @@ def main():
             
             if player_rect.colliderect(block_rect) and immunity_timer == 0:                
                 lives -= 1
-                render_frame(surface, blocks, x, y, score, heart_image, lives, 1)
+                render_frame(surface, blocks, x, y, score, heart_image, lives, 1, background_image)
                 pygame.time.delay(300)
                 immunity_timer = 90
                 
@@ -185,7 +189,7 @@ def main():
                 break 
 
         
-        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer)
+        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer, background_image)
 
     pygame.quit()
     sys.exit()
