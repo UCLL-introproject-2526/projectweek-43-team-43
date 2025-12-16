@@ -76,13 +76,24 @@ def show_game_over(surface, final_score):
                 if event.key == pygame.K_SPACE:
                     waiting = False
 
-def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img):
+def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large):
     surface.fill(BLACK)
     surface.blit(background_img, (0,0))
     
    
     for block in blocks:
-        pygame.draw.rect(surface, RED, (block[0], block[1], block[2], block[2]))
+        x_pos, y_pos, size = block[0], block[1], block[2]
+
+        if size < 40:
+            chosen_img = img_small
+        elif size < 50:
+            chosen_img = img_medium
+        else:
+            chosen_img = img_large
+    
+        scaled_meteor = pygame.transform.scale(chosen_img, (size, size))
+        surface.blit(scaled_meteor, (x_pos, y_pos))
+
 
     if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
         pygame.draw.circle(surface, BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
@@ -108,6 +119,11 @@ def main():
 
     background_image = pygame.image.load("images/galaxy.png").convert()
     background_image = pygame.transform.scale(background_image, SCREEN_SIZE)
+
+    meteor_small = pygame.image.load("images/meteoriet2.png").convert()
+    meteor_medium = pygame.image.load("images/mars.png").convert()
+    meteor_large = pygame.image.load("images/jupiter.png").convert()
+
 
     
     heart_image = pygame.image.load("images/lives.png").convert_alpha()
@@ -173,7 +189,7 @@ def main():
             
             if player_rect.colliderect(block_rect) and immunity_timer == 0:                
                 lives -= 1
-                render_frame(surface, blocks, x, y, score, heart_image, lives, 1, background_image)
+                render_frame(surface, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large)
                 pygame.time.delay(300)
                 immunity_timer = 90
                 
@@ -190,7 +206,7 @@ def main():
                 break 
 
         
-        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer, background_image)
+        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large)
 
     pygame.quit()
     sys.exit()
