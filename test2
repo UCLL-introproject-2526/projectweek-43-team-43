@@ -1,21 +1,29 @@
 import pygame
 import random
+import sys
+
 
 pygame.init()
 
-# Constanten
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
-BLUE = (0, 0, 255) # Kleur voor de speler
-MOVEMENT_SPEED = 5 # Verhoogd voor betere speelbaarheid
+WHITE = (255, 255, 255)
+BLUE = (0, 100, 255)
+GREEN = (0, 255, 0)
 
 SCREEN_SIZE = (1024, 768)
-BLOCK_SIZE = 20
-BLOCK_COUNT = 20
+BLOCK_SIZE = 25
+BLOCK_COUNT = 15
+PLAYER_RADIUS = 20
 
-START_SPEED = 2          
-SPEED_INCREASE = 0.002   
-MAX_SPEED = 10           
+MOVEMENT_SPEED = 7
+START_SPEED = 3
+SPEED_INCREASE = 0.002
+MAX_SPEED = 12
+
+FONT_GAME_OVER = pygame.font.SysFont("Arial", 72, bold=True)
+FONT_RETRY = pygame.font.SysFont("Arial", 30)
+
 
 def create_main_surface(screen_size):
     return pygame.display.set_mode(screen_size)
@@ -31,68 +39,104 @@ def create_blocks():
 def update_blocks(blocks, fall_speed):
     for block in blocks:
         block[1] += fall_speed
-        # Als het blok beneden is, reset naar boven
         if block[1] > SCREEN_SIZE[1]:
-            block[1] = random.randint(-100, 0)
+            block[1] = random.randint(-150, 0)
             block[0] = random.randint(0, SCREEN_SIZE[0] - BLOCK_SIZE)
 
-# Één gecombineerde render functie
+def show_game_over(surface):
+    waiting = True
+    while waiting:
+        surface.fill(BLACK)
+        text_surface = FONT_GAME_OVER.render("GAME OVER", True, RED)
+        retry_surface = FONT_RETRY.render("press space button to restart", True, GREEN)
+        
+        text_rect = text_surface.get_rect(center=(SCREEN_SIZE[0]//2, SCREEN_SIZE[1]//2 - 50))
+        retry_rect = retry_surface.get_rect(center=(SCREEN_SIZE[0]//2, SCREEN_SIZE[1]//2 + 50))
+        
+        surface.blit(text_surface, text_rect)
+        surface.blit(retry_surface, retry_rect)
+        pygame.display.flip()
+        
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    waiting = False
+
 def render_frame(surface, blocks, player_x, player_y):
     surface.fill(BLACK)
-
-    # Teken de vallende blokken
     for block in blocks:
         pygame.draw.rect(surface, RED, (block[0], block[1], BLOCK_SIZE, BLOCK_SIZE))
-
-    # Teken de speler (de cirkel)
-    radius = 20
-    pygame.draw.circle(surface, BLUE, (int(player_x), int(player_y)), radius)
-
+    pygame.draw.circle(surface, BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
     pygame.display.flip()
+
 
 def main():
     surface = create_main_surface(SCREEN_SIZE)
+    pygame.display.set_caption("Ontwijk de blokken!")
     clock = pygame.time.Clock()
 
-    x = surface.get_width() // 2 
-    y = surface.get_height() - 50 # Speler onderaan het scherm zetten
 
+    x = SCREEN_SIZE[0] // 2
+    y = SCREEN_SIZE[1] - 100
     x_velocity = 0
     blocks = create_blocks()
     fall_speed = START_SPEED
 
     running = True
     while running:
-        clock.tick(60)  
+        clock.tick(60)
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             
-            # Besturing
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     running = False
-                if event.key == pygame.K_d:
-                    x_velocity = MOVEMENT_SPEED  
-                elif event.key == pygame.K_q: # 'q' voor AZERTY, verander naar 'a' voor QWERTY
+                if event.key == pygame.K_d: 
+                    x_velocity = MOVEMENT_SPEED
+                elif event.key == pygame.K_q: 
                     x_velocity = -MOVEMENT_SPEED
             
             if event.type == pygame.KEYUP:
-                if event.key == pygame.K_d or event.key == pygame.K_q:
+                if event.key in [pygame.K_d, pygame.K_q]:
                     x_velocity = 0
 
-        # Update posities
+    
         x += x_velocity
-        fall_speed += SPEED_INCREASE
-        fall_speed = min(fall_speed, MAX_SPEED)
-
+        fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
         update_blocks(blocks, fall_speed)
 
-        # Teken alles
+    
+        if x < PLAYER_RADIUS: x = PLAYER_RADIUS
+        if x > SCREEN_SIZE[0] - PLAYER_RADIUS: x = SCREEN_SIZE[0] - PLAYER_RADIUS
+
+       
+        player_rect = pygame.Rect(x - PLAYER_RADIUS, y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
+        
+        for block in blocks:
+            block_rect = pygame.Rect(block[0], block[1], BLOCK_SIZE, BLOCK_SIZE)
+            
+            if player_rect.colliderect(block_rect):
+                show_game_over(surface) 
+                
+              
+                x = SCREEN_SIZE[0] // 2
+                y = SCREEN_SIZE[1] - 100
+                x_velocity = 0
+                fall_speed = START_SPEED
+                blocks = create_blocks()
+               
+                break 
+
+     
         render_frame(surface, blocks, x, y)
 
     pygame.quit()
+    sys.exit()
 
 if __name__ == '__main__':
     main()
