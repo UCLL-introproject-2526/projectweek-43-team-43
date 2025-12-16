@@ -1,11 +1,11 @@
-import pygame
+
 from pygame.draw import circle
 from pygame.display import flip
 
-pygame.init()
 
-BLACK = (0, 0, 0)
-RED = (255, 0, 0)
+
+
+
 MOVEMENT_SPEED = 0.5 
 
 def create_main_surface(screen_size):

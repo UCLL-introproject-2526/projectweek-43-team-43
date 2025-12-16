@@ -1,0 +1,88 @@
+import pygame
+import random
+
+pygame.init()
+
+
+BLACK = (0, 0, 0)
+RED = (255, 0, 0)
+
+SCREEN_SIZE = (1024, 768)
+BLOCK_SIZE = 20
+BLOCK_COUNT = 20
+
+START_SPEED = 2          
+SPEED_INCREASE = 0.002   
+MAX_SPEED = 10           
+
+
+
+def create_main_surface(screen_size):
+    return pygame.display.set_mode(screen_size)
+
+def create_blocks():
+   
+    blocks = []
+    for _ in range(BLOCK_COUNT):
+        x = random.randint(0, SCREEN_SIZE[0] - BLOCK_SIZE)
+        y = random.randint(-SCREEN_SIZE[1], 0)
+        blocks.append([x, y])
+    return blocks
+
+def update_blocks(blocks, fall_speed):
+   
+    for block in blocks:
+        block[1] += fall_speed
+
+        if block[1] > SCREEN_SIZE[1]:
+            block[1] = random.randint(-100, 0)
+            block[0] = random.randint(0, SCREEN_SIZE[0] - BLOCK_SIZE)
+
+def render_frame(surface, blocks):
+   
+    surface.fill(BLACK)
+
+    for block in blocks:
+        pygame.draw.rect(
+            surface,
+            RED,
+            (block[0], block[1], BLOCK_SIZE, BLOCK_SIZE)
+        )
+
+    pygame.display.flip()
+
+
+
+def main():
+    surface = create_main_surface(SCREEN_SIZE)
+    clock = pygame.time.Clock()
+
+    blocks = create_blocks()
+    fall_speed = START_SPEED
+
+    running = True
+    while running:
+        clock.tick(60)  
+
+    
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                running = False
+
+     
+        fall_speed += SPEED_INCREASE
+        fall_speed = min(fall_speed, MAX_SPEED)
+
+        update_blocks(blocks, fall_speed)
+
+      
+        render_frame(surface, blocks)
+
+    pygame.quit()
+
+
+
+if __name__ == '__main__':
+    main()
