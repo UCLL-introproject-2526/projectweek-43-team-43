@@ -26,6 +26,11 @@ FONT_GAME_OVER = pygame.font.SysFont("Arial", 72, bold=True)
 FONT_RETRY = pygame.font.SysFont("Arial", 30)
 FONT_SCORE = pygame.font.SysFont("Arial", 30, bold=True)
 
+# De waarde die bepaalt hoeveel pixels de hitbox van de rand moet worden verkleind.
+# Experimenteer met deze waarde! 5 is een goed begin.
+HITBOX_SHRINK = 5 
+
+
 def create_main_surface(screen_size):
     return pygame.display.set_mode(screen_size)
 
@@ -75,17 +80,22 @@ def show_game_over(surface, final_score):
                 if event.key == pygame.K_SPACE:
                     waiting = False
 
-def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer):
+def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, **images): 
     surface.fill(BLACK)
     
-   
+    
+    # Gebruik de meteorietafbeelding
+    meteor_img = images.get("meteor") 
     for block in blocks:
-        pygame.draw.rect(surface, RED, (block[0], block[1], BLOCK_SIZE, BLOCK_SIZE))
-
-    if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
-        pygame.draw.circle(surface, BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
+        surface.blit(meteor_img, (block[0], block[1]))
     
     
+    # Gebruik de ruimteschipafbeelding
+    spaceship_img = images.get("spaceship")
+    # De afbeelding wordt gecentreerd op (player_x, player_y)
+    blit_x = int(player_x) - PLAYER_RADIUS
+    blit_y = int(player_y) - PLAYER_RADIUS
+    surface.blit(spaceship_img, (blit_x, blit_y))
     
     
     score_display = "Score: " + str(current_score // 10)
@@ -105,8 +115,30 @@ def main():
     clock = pygame.time.Clock()
 
     
-    heart_image = pygame.image.load("images/lives.png").convert_alpha()
-    heart_image = pygame.transform.scale(heart_image, (30, 30))
+    # Afbeeldingen laden vanuit de 'images/' map en schalen
+    try:
+        # Pad aangepast naar "images/"
+        heart_image = pygame.image.load("16_dec_2025__13_11_31-removebg-preview.png").convert_alpha()
+        heart_image = pygame.transform.scale(heart_image, (30, 30))
+    except pygame.error:
+        print("Fout: Kon hartafbeelding niet laden. Controleer het pad 'images/16_dec_2025__13_11_31-removebg-preview.png'.")
+        return 
+
+    try:
+        # Pad aangepast naar "images/"
+        spaceship_image = pygame.image.load("images/spaceship.png").convert_alpha()
+        spaceship_image = pygame.transform.scale(spaceship_image, (PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)) 
+    except pygame.error:
+        print("Fout: Kon 'spaceship.png' niet laden. Controleer het pad 'images/spaceship.png'.")
+        return 
+    
+    try:
+        # Pad aangepast naar "images/"
+        meteor_image = pygame.image.load("images/meteoriet.png").convert_alpha()
+        meteor_image = pygame.transform.scale(meteor_image, (BLOCK_SIZE, BLOCK_SIZE))
+    except pygame.error:
+        print("Fout: Kon 'meteoriet.png' niet laden. Controleer het pad 'images/meteoriet.png'.")
+        return 
 
     
     x = SCREEN_SIZE[0] // 2
@@ -117,14 +149,10 @@ def main():
     fall_speed = START_SPEED
     score = 0
     lives = 3
-    immunity_timer = 0
 
     running = True
     while running:
         clock.tick(60)
-
-        if immunity_timer > 0:
-            immunity_timer -= 1
         
 
         for event in pygame.event.get():
@@ -157,35 +185,52 @@ def main():
         fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
         update_blocks(blocks, fall_speed)
 
-      
+        
+        # Begrenzing van de speler
         if x < PLAYER_RADIUS: x = PLAYER_RADIUS
         if x > SCREEN_SIZE[0] - PLAYER_RADIUS: x = SCREEN_SIZE[0] - PLAYER_RADIUS
+        if y < PLAYER_RADIUS: y = PLAYER_RADIUS
+        if y > SCREEN_SIZE[1] - PLAYER_RADIUS: y = SCREEN_SIZE[1] - PLAYER_RADIUS
 
-        player_rect = pygame.Rect(x - PLAYER_RADIUS, y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
+
+        # BEREKENING VAN DE VERKLEINDE HITBOX (Optie 1)
+        # We verkleinen de rechthoek aan alle vier de zijden met de waarde van HITBOX_SHRINK.
+        # Dit compenseert voor transparante randen in de afbeeldingen.
+        player_rect = pygame.Rect(
+            x - PLAYER_RADIUS + HITBOX_SHRINK,                   # Nieuwe linkerboven X
+            y - PLAYER_RADIUS + HITBOX_SHRINK,                   # Nieuwe linkerboven Y
+            PLAYER_RADIUS * 2 - (HITBOX_SHRINK * 2),             # Nieuwe breedte
+            PLAYER_RADIUS * 2 - (HITBOX_SHRINK * 2)              # Nieuwe hoogte
+        )
+        
         
         for block in blocks:
+            # Gebruik de volledige BLOCK_SIZE voor de meteoriet-hitbox
             block_rect = pygame.Rect(block[0], block[1], BLOCK_SIZE, BLOCK_SIZE)
             
-            if player_rect.colliderect(block_rect) and immunity_timer == 0:                
+            # Controle op botsing
+            if player_rect.colliderect(block_rect): 
                 lives -= 1
-                render_frame(surface, blocks, x, y, score, heart_image, lives, 1)
-                pygame.time.delay(300)
-                immunity_timer = 90
                 
                 if lives <= 0:
                     show_game_over(surface, score) 
                     lives = 3  
                     score = 0
                     fall_speed = START_SPEED
-              
-                    x = SCREEN_SIZE[0] // 2
-                    y = SCREEN_SIZE[1] - 100
-                    x_velocity = 0
-                    blocks = create_blocks()
+                
+                # Reset spelerpositie
+                x = SCREEN_SIZE[0] // 2
+                y = SCREEN_SIZE[1] - 100
+                x_velocity = 0
+                y_velocity = 0
+                
+                # Reset blokken
+                blocks = create_blocks()
                 break 
 
         
-        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer)
+        render_frame(surface, blocks, x, y, score, heart_image, lives, 
+                     spaceship=spaceship_image, meteor=meteor_image)
 
     pygame.quit()
     sys.exit()
