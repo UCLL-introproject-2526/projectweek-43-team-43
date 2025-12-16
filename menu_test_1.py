@@ -3,13 +3,15 @@ import pygame.freetype
 from enum import Enum
 from pygame.sprite import Sprite, RenderUpdates
 
-GREEN = (0, 255, 0)
+# --- INSTELLINGEN ---
+# Hier passen we de resolutie aan zoals in je eerste screenshot
+SCREEN_WIDTH = 1024
+SCREEN_HEIGHT = 768
+CENTER_X = SCREEN_WIDTH / 2
+
 BLUE = (106, 159, 181)
 WHITE = (255, 255, 255)
 RED = (255, 0 , 0)
-
-SCREEN_WIDTH = 1024
-SCREEN_HEIGHT = 768
 
 class GameState(Enum):
     QUIT = -1
@@ -17,8 +19,10 @@ class GameState(Enum):
     PLAYING = 1
     GAMEOVER = 2
 
+# --- UI KLASSE ---
 
 def create_surface_with_text(text, font_size, text_rgb, bg_rgb):
+    """ Hulpfunctie om tekst om te zetten in een plaatje """
     font = pygame.freetype.SysFont("Courier", font_size, bold=True)
     surface, _ = font.render(text=text, fgcolor=text_rgb, bgcolor=bg_rgb)
     return surface.convert_alpha()
@@ -37,14 +41,21 @@ class UIElement(Sprite):
             default_image.get_rect(center=center_position),
             highlighted_image.get_rect(center=center_position),
         ]
+
+    # --- BELANGRIJK: DE FIX VOOR JE FOUTMELDING ---
+    # De '@property' zorgt ervoor dat we self.image kunnen gebruiken als variabele
+    # in plaats van als functie. Zonder dit crasht de game.
+    @property
     def image(self):
         return self.images[1] if self.mouse_over else self.images[0]
 
-    
+    @property
     def rect(self):
         return self.rects[1] if self.mouse_over else self.rects[0]
+    # ---------------------------------------------
 
     def update(self, mouse_pos, mouse_up):
+    
         if self.rect.collidepoint(mouse_pos):
             self.mouse_over = True
             if mouse_up:
@@ -58,6 +69,7 @@ class UIElement(Sprite):
 
 
 def game_loop(screen, buttons):
+    """ De lus die kijkt of er geklikt wordt """
     while True:
         mouse_up = False
         for event in pygame.event.get():
@@ -76,10 +88,10 @@ def game_loop(screen, buttons):
 
         pygame.display.flip()
 
+
 def title_screen(screen):
-    # Het midden van de breedte van het scherm is nu 512 (1024 / 2), in een ander geval is gwn hetzelfde principe
     start_btn = UIElement(
-        center_position=(512, 350), 
+        center_position=(CENTER_X, 350), #in het midden
         font_size=30,
         bg_rgb=BLUE,
         text_rgb=WHITE,
@@ -87,7 +99,7 @@ def title_screen(screen):
         action=GameState.PLAYING,
     )
     quit_btn = UIElement(
-        center_position=(512, 450),
+        center_position=(CENTER_X, 450),
         font_size=30,
         bg_rgb=BLUE,
         text_rgb=WHITE,
@@ -97,17 +109,18 @@ def title_screen(screen):
     return game_loop(screen, RenderUpdates(start_btn, quit_btn))
 
 def play_level(screen):
+    
     info_text = UIElement(
-        center_position=(512, 300),
+        center_position=(CENTER_X, 300),
         font_size=20,
         bg_rgb=BLUE,
         text_rgb=WHITE,
-        text="(Hier zou de gameplay moeten komen)",
+        text="(Hier moet de gameplay komen)",
         action=None,
     )
     
     stop_btn = UIElement(
-        center_position=(512, 400),
+        center_position=(CENTER_X, 400),
         font_size=30,
         bg_rgb=BLUE,
         text_rgb=RED,
@@ -118,7 +131,7 @@ def play_level(screen):
 
 def game_over_screen(screen):
     tekst_btn = UIElement(
-        center_position=(512, 200),
+        center_position=(CENTER_X, 200),
         font_size=50,
         bg_rgb=BLUE,
         text_rgb=RED,
@@ -126,7 +139,7 @@ def game_over_screen(screen):
         action=None,
     )
     restart_btn = UIElement(
-        center_position=(512, 350),
+        center_position=(CENTER_X, 350),
         font_size=30,
         bg_rgb=BLUE,
         text_rgb=WHITE,
@@ -134,7 +147,7 @@ def game_over_screen(screen):
         action=GameState.PLAYING,
     )
     menu_btn = UIElement(
-        center_position=(512, 450),
+        center_position=(CENTER_X, 450),
         font_size=30,
         bg_rgb=BLUE,
         text_rgb=WHITE,
@@ -144,11 +157,10 @@ def game_over_screen(screen):
     return game_loop(screen, RenderUpdates(tekst_btn, restart_btn, menu_btn))
 
 
-
 def main():
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Menu Test 1024x768")
+    pygame.display.set_caption("Dodge Blocks - Menu Test")
     
     game_state = GameState.TITLE
 
