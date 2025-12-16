@@ -109,7 +109,7 @@ def main():
     background_image = pygame.transform.scale(background_image, SCREEN_SIZE)
 
     
-    heart_image = pygame.image.load("16_dec_2025__13_11_31-removebg-preview.png").convert_alpha()
+    heart_image = pygame.image.load("images/lives.png").convert_alpha()
     heart_image = pygame.transform.scale(heart_image, (30, 30))
 
     
