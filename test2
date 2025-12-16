@@ -75,15 +75,17 @@ def show_game_over(surface, final_score):
                 if event.key == pygame.K_SPACE:
                     waiting = False
 
-def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives):
+def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer):
     surface.fill(BLACK)
     
    
     for block in blocks:
         pygame.draw.rect(surface, RED, (block[0], block[1], BLOCK_SIZE, BLOCK_SIZE))
+
+    if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
+        pygame.draw.circle(surface, BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
     
     
-    pygame.draw.circle(surface, BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
     
     
     score_display = "Score: " + str(current_score // 10)
@@ -114,10 +116,14 @@ def main():
     fall_speed = START_SPEED
     score = 0
     lives = 3
+    immunity_timer = 0
 
     running = True
     while running:
         clock.tick(60)
+
+        if immunity_timer > 0:
+            immunity_timer -= 1
         
 
         for event in pygame.event.get():
@@ -151,8 +157,11 @@ def main():
         for block in blocks:
             block_rect = pygame.Rect(block[0], block[1], BLOCK_SIZE, BLOCK_SIZE)
             
-            if player_rect.colliderect(block_rect):                
+            if player_rect.colliderect(block_rect) and immunity_timer == 0:                
                 lives -= 1
+                render_frame(surface, blocks, x, y, score, heart_image, lives, 1)
+                pygame.time.delay(300)
+                immunity_timer = 90
                 
                 if lives <= 0:
                     show_game_over(surface, score) 
@@ -160,16 +169,14 @@ def main():
                     score = 0
                     fall_speed = START_SPEED
               
-                x = SCREEN_SIZE[0] // 2
-                y = SCREEN_SIZE[1] - 100
-                x_velocity = 0
-                
-                
-                blocks = create_blocks()
+                    x = SCREEN_SIZE[0] // 2
+                    y = SCREEN_SIZE[1] - 100
+                    x_velocity = 0
+                    blocks = create_blocks()
                 break 
 
         
-        render_frame(surface, blocks, x, y, score, heart_image, lives)
+        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer)
 
     pygame.quit()
     sys.exit()
