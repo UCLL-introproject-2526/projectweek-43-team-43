@@ -1,6 +1,5 @@
 import pygame
 pygame.init()
-pygame.mixer.init()
 
 
 #scherm
@@ -10,6 +9,11 @@ SCREEN = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 pygame.display.set_caption("Hier Moet Onze Game Naam Komen")    
 
 
+
+#muziek
+pygame.mixer.init()
+pygame.mixer.music.load("./audio/music.mp3")
+pygame.mixer.music.play(-1)
 
 
 
