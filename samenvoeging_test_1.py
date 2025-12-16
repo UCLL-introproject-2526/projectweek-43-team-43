@@ -366,7 +366,7 @@ def title_screen(screen):
 def options_screen(screen):
     TITLE = UIElement(
         center_position=(CENTER_X, 150),
-        font_size=50,
+        font_size=70,
         bg_rgb=BLUE,
         text_rgb=WHITE,
         text="SETTINGS",
@@ -375,7 +375,7 @@ def options_screen(screen):
 
     sound_btn = UIElement(
         center_position=(CENTER_X, 300),  
-        font_size=50,
+        font_size=40,
         bg_rgb=BLUE,
         text_rgb=WHITE,
         text="Sound",
@@ -384,7 +384,7 @@ def options_screen(screen):
 
     controls_button = UIElement(
         center_position=(CENTER_X, 450),
-        font_size=50,
+        font_size=40,
         bg_rgb=BLUE,
         text_rgb=WHITE,
         text="CONTROLS",
@@ -393,7 +393,7 @@ def options_screen(screen):
 
     back_btn = UIElement(
         center_position=(CENTER_X, 600),
-        font_size=50,
+        font_size=40,
         bg_rgb=BLUE,
         text_rgb=WHITE,
         text="Back",
