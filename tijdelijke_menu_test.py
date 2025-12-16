@@ -20,8 +20,14 @@ class GameState(Enum):
     GAMEOVER = 2
     OPTIONS = 3
     VIDEO_SETTINGS = 4
-    AUDIO = 5
+    SOUND = 5
     CONTROLS = 6
+
+#MUZIEK
+pygame.mixer.init()
+pygame.mixer.music.load("./audio/music.mp3")
+pygame.mixer.music.play(-1)
+
 
 
 
@@ -137,8 +143,8 @@ def options_screen(screen):
         font_size=50,
         bg_rgb=BLUE,
         text_rgb=WHITE,
-        text="Sound: ON",
-        action=None,
+        text="Sound",
+        action=GameState.SOUND,
     )
 
     controls_button = UIElement(
@@ -266,6 +272,49 @@ def game_over_screen(screen):
     )
     return game_loop(screen, RenderUpdates(tekst_btn, restart_btn, menu_btn))
 
+#Audio scherm
+def sound_screen(screen):
+    TITLE = UIElement(
+        center_position=(CENTER_X, 100),
+        font_size=50,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="SOUNDS",
+        action=None,
+    )
+    
+    music_btn = UIElement(
+        center_position=(CENTER_X, 300),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="Muziek: On/Off",
+        action=None,
+    )
+
+    effects_btn = UIElement(
+        center_position=(CENTER_X, 400),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="Effects: On/Off",
+        action=None,
+    )
+
+    back_btn = UIElement(
+        center_position=(CENTER_X, 600),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="Back to Options",
+        action=GameState.OPTIONS,
+    )
+
+    return game_loop(screen, RenderUpdates(TITLE, music_btn, effects_btn, back_btn))
+
+
+
+
 
 def main():
     pygame.init()
@@ -290,6 +339,8 @@ def main():
         if game_state == GameState.CONTROLS:
             game_state = control_buttons(screen)
         
+        if game_state == GameState.SOUND:
+            game_state = sound_screen(screen)
 
         if game_state == GameState.QUIT:
             pygame.quit()
