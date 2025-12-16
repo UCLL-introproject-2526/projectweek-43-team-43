@@ -2,7 +2,7 @@ import pygame
 import random
 import sys
 
-# 1. INITIALISATIE & CONSTANTEN
+
 pygame.init()
 
 BLACK = (0, 0, 0)
@@ -21,12 +21,11 @@ START_SPEED = 3
 SPEED_INCREASE = 0.002
 MAX_SPEED = 12
 
-# Lettertypes
+
 FONT_GAME_OVER = pygame.font.SysFont("Arial", 72, bold=True)
 FONT_RETRY = pygame.font.SysFont("Arial", 30)
 FONT_SCORE = pygame.font.SysFont("Arial", 30, bold=True)
 
-# 2. FUNCTIES
 def create_main_surface(screen_size):
     return pygame.display.set_mode(screen_size)
 
@@ -50,17 +49,13 @@ def show_game_over(surface, final_score):
     while waiting:
         surface.fill(BLACK)
         
-      
+        
         text_surface = FONT_GAME_OVER.render("GAME OVER", True, RED)
-        
-        
         score_text = "Jouw Score: " + str(final_score // 10)
         final_score_surface = FONT_RETRY.render(score_text, True, WHITE)
-        
-        
         retry_surface = FONT_RETRY.render("Druk op SPATIE om opnieuw te starten", True, GREEN)
         
-       
+        
         text_rect = text_surface.get_rect(center=(SCREEN_SIZE[0]//2, SCREEN_SIZE[1]//2 - 80))
         final_score_rect = final_score_surface.get_rect(center=(SCREEN_SIZE[0]//2, SCREEN_SIZE[1]//2))
         retry_rect = retry_surface.get_rect(center=(SCREEN_SIZE[0]//2, SCREEN_SIZE[1]//2 + 80))
@@ -80,20 +75,26 @@ def show_game_over(surface, final_score):
                 if event.key == pygame.K_SPACE:
                     waiting = False
 
-def render_frame(surface, blocks, player_x, player_y, current_score):
+def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer):
     surface.fill(BLACK)
     
    
     for block in blocks:
         pygame.draw.rect(surface, RED, (block[0], block[1], BLOCK_SIZE, BLOCK_SIZE))
+
+    if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
+        pygame.draw.circle(surface, BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
     
-   
-    pygame.draw.circle(surface, BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
     
-   
+    
+    
     score_display = "Score: " + str(current_score // 10)
     score_surface = FONT_SCORE.render(score_display, True, WHITE)
     surface.blit(score_surface, (SCREEN_SIZE[0] - 180, 20))
+    
+    
+    for i in range(current_lives):
+        surface.blit(heart_img, (20 + (i * 35), 20))
     
     pygame.display.flip()
 
@@ -104,16 +105,27 @@ def main():
     clock = pygame.time.Clock()
 
     
+    heart_image = pygame.image.load("16_dec_2025__13_11_31-removebg-preview.png").convert_alpha()
+    heart_image = pygame.transform.scale(heart_image, (30, 30))
+
+    
     x = SCREEN_SIZE[0] // 2
     y = SCREEN_SIZE[1] - 100
     x_velocity = 0
+    y_velocity = 0
     blocks = create_blocks()
     fall_speed = START_SPEED
     score = 0
+    lives = 3
+    immunity_timer = 0
 
     running = True
     while running:
         clock.tick(60)
+
+        if immunity_timer > 0:
+            immunity_timer -= 1
+        
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -124,43 +136,56 @@ def main():
                     running = False
                 if event.key == pygame.K_d: 
                     x_velocity = MOVEMENT_SPEED
-                elif event.key == pygame.K_q: 
+                if event.key == pygame.K_q: 
                     x_velocity = -MOVEMENT_SPEED
+                if event.key == pygame.K_z:
+                    y_velocity = -MOVEMENT_SPEED
+                if event.key == pygame.K_s:
+                    y_velocity = MOVEMENT_SPEED
             
             if event.type == pygame.KEYUP:
                 if event.key in [pygame.K_d, pygame.K_q]:
                     x_velocity = 0
+            if event.type == pygame.KEYUP:
+                if event.key in [pygame.K_z, pygame.K_s]:
+                    y_velocity = 0
 
-       
+        
         x += x_velocity
-        score += 1
+        y += y_velocity
+        score += 1 
         fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
         update_blocks(blocks, fall_speed)
 
-       
+      
         if x < PLAYER_RADIUS: x = PLAYER_RADIUS
         if x > SCREEN_SIZE[0] - PLAYER_RADIUS: x = SCREEN_SIZE[0] - PLAYER_RADIUS
 
-        
         player_rect = pygame.Rect(x - PLAYER_RADIUS, y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
         
         for block in blocks:
             block_rect = pygame.Rect(block[0], block[1], BLOCK_SIZE, BLOCK_SIZE)
             
-            if player_rect.colliderect(block_rect):
-                show_game_over(surface, score) 
+            if player_rect.colliderect(block_rect) and immunity_timer == 0:                
+                lives -= 1
+                render_frame(surface, blocks, x, y, score, heart_image, lives, 1)
+                pygame.time.delay(300)
+                immunity_timer = 90
                 
-                
-                x = SCREEN_SIZE[0] // 2
-                y = SCREEN_SIZE[1] - 100
-                x_velocity = 0
-                fall_speed = START_SPEED
-                score = 0
-                blocks = create_blocks()
+                if lives <= 0:
+                    show_game_over(surface, score) 
+                    lives = 3  
+                    score = 0
+                    fall_speed = START_SPEED
+              
+                    x = SCREEN_SIZE[0] // 2
+                    y = SCREEN_SIZE[1] - 100
+                    x_velocity = 0
+                    blocks = create_blocks()
                 break 
 
-       
-        render_frame(surface, blocks, x, y, score)
+        
+        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer)
 
     pygame.quit()
     sys.exit()
