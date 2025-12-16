@@ -112,6 +112,7 @@ def main():
     x = SCREEN_SIZE[0] // 2
     y = SCREEN_SIZE[1] - 100
     x_velocity = 0
+    y_velocity = 0
     blocks = create_blocks()
     fall_speed = START_SPEED
     score = 0
@@ -135,15 +136,23 @@ def main():
                     running = False
                 if event.key == pygame.K_d: 
                     x_velocity = MOVEMENT_SPEED
-                elif event.key == pygame.K_q: 
+                if event.key == pygame.K_q: 
                     x_velocity = -MOVEMENT_SPEED
+                if event.key == pygame.K_z:
+                    y_velocity = -MOVEMENT_SPEED
+                if event.key == pygame.K_s:
+                    y_velocity = MOVEMENT_SPEED
             
             if event.type == pygame.KEYUP:
                 if event.key in [pygame.K_d, pygame.K_q]:
                     x_velocity = 0
+            if event.type == pygame.KEYUP:
+                if event.key in [pygame.K_z, pygame.K_s]:
+                    y_velocity = 0
 
         
         x += x_velocity
+        y += y_velocity
         score += 1 
         fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
         update_blocks(blocks, fall_speed)

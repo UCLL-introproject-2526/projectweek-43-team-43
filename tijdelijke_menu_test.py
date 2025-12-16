@@ -97,7 +97,7 @@ def game_loop(screen, buttons):
 def title_screen(screen):
     options_btn = UIElement(
         center_position=(CENTER_X, 400),
-        font_size=30,
+        font_size=50,
         bg_rgb=BLUE,
         text_rgb=WHITE,
         text="Options",
@@ -105,16 +105,16 @@ def title_screen(screen):
     )
 
     start_btn = UIElement(
-        center_position=(CENTER_X, 350), #in het midden
-        font_size=30,
+        center_position=(CENTER_X, 250), #in het midden
+        font_size=50,
         bg_rgb=BLUE,
         text_rgb=WHITE,
         text="Start Game",
         action=GameState.PLAYING,
     )
     quit_btn = UIElement(
-        center_position=(CENTER_X, 450),
-        font_size=30,
+        center_position=(CENTER_X, 550),
+        font_size=50,
         bg_rgb=BLUE,
         text_rgb=WHITE,
         text="Afsluiten",
@@ -147,10 +147,8 @@ def options_screen(screen):
         bg_rgb=BLUE,
         text_rgb=WHITE,
         text="CONTROLS",
-        action=None,
+        action=GameState.CONTROLS,
     )
-
-    
 
     back_btn = UIElement(
         center_position=(CENTER_X, 600),
@@ -163,7 +161,62 @@ def options_screen(screen):
 
     return game_loop(screen, RenderUpdates(TITLE, back_btn, controls_button, sound_btn))
 
+def control_buttons(screen):
+    TITLE = UIElement(
+        center_position=(CENTER_X, 100),
+        font_size=50,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="CONTROLS",
+        action=None,
+    )
 
+    key_left = UIElement(
+        center_position=(CENTER_X, 200),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="LEFT_ARROW_KEY: MOVE LEFT",
+        action=None,
+    )
+
+    key_right = UIElement(
+        center_position=(CENTER_X, 300),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="RIGHT_ARROW_KEY: MOVE RIGHT",
+        action=None,
+    )
+
+    key_down = UIElement(
+        center_position=(CENTER_X, 400),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="ARROW_KEY_DOWN: MOVE DOWN",
+        action=None,
+    )
+
+    key_up = UIElement(
+        center_position=(CENTER_X, 500),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="ARROW_KEY_UP: MOVE UP",
+        action=None,
+    )
+
+    back_btn = UIElement(
+        center_position=(CENTER_X, 600),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="Back to Options",
+        action=GameState.OPTIONS,
+    )
+
+    return game_loop(screen, RenderUpdates(TITLE, key_down, key_left, key_right, key_up, back_btn))
 
 def play_level(screen):
     
@@ -234,6 +287,8 @@ def main():
         if game_state == GameState.OPTIONS:
             game_state = options_screen(screen)
         
+        if game_state == GameState.CONTROLS:
+            game_state = control_buttons(screen)
         
 
         if game_state == GameState.QUIT:
