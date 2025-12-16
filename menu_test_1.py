@@ -119,7 +119,6 @@ def game_loop(screen, buttons):
         pygame.display.flip()
 
 
-
 def title_screen(screen):
     options_btn = UIElement(
         center_position=(CENTER_X, 400),
