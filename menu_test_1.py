@@ -3,15 +3,20 @@ import pygame.freetype
 from enum import Enum
 from pygame.sprite import Sprite, RenderUpdates
 
-# --- INSTELLINGEN ---
-# Hier passen we de resolutie aan zoals in je eerste screenshot
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 768
 CENTER_X = SCREEN_WIDTH / 2
 
+
+KEY_LEFT = pygame.K_LEFT
+KEY_RIGHT = pygame.K_RIGHT
+KEY_UP = pygame.K_UP
+KEY_DOWN = pygame.K_DOWN
+
 BLUE = (106, 159, 181)
 WHITE = (255, 255, 255)
 RED = (255, 0 , 0)
+YELLOW = (255, 255, 0) 
 
 class GameState(Enum):
     QUIT = -1
@@ -19,11 +24,7 @@ class GameState(Enum):
     PLAYING = 1
     GAMEOVER = 2
     OPTIONS = 3
-    VIDEO_SETTINGS = 4
-    AUDIO = 5
     CONTROLS = 6
-
-
 
 def create_surface_with_text(text, font_size, text_rgb, bg_rgb):
     """ Hulpfunctie om tekst om te zetten in een plaatje """
@@ -47,9 +48,20 @@ class UIElement(Sprite):
             highlighted_image.get_rect(center=center_position),
         ]
 
-    # --- BELANGRIJK: DE FIX VOOR JE FOUTMELDING ---
-    # De '@property' zorgt ervoor dat we self.image kunnen gebruiken als variabele
-    # in plaats van als functie. Zonder dit crasht de game.
+    
+    def set_text(self, text, font_size, bg_rgb, text_rgb):
+        default_image = create_surface_with_text(text, font_size, text_rgb, bg_rgb)
+        highlighted_image = create_surface_with_text(text, int(font_size * 1.2), text_rgb, bg_rgb)
+
+        self.images = [default_image, highlighted_image]
+        
+        
+        current_center = self.rects[0].center
+        self.rects = [
+            default_image.get_rect(center=current_center),
+            highlighted_image.get_rect(center=current_center),
+        ]
+
     @property
     def image(self):
         return self.images[1] if self.mouse_over else self.images[0]
@@ -57,10 +69,8 @@ class UIElement(Sprite):
     @property
     def rect(self):
         return self.rects[1] if self.mouse_over else self.rects[0]
-    
 
     def update(self, mouse_pos, mouse_up):
-    
         if self.rect.collidepoint(mouse_pos):
             self.mouse_over = True
             if mouse_up:
@@ -73,8 +83,15 @@ class UIElement(Sprite):
         surface.blit(self.image, self.rect)
 
 
+
+def wait_for_key():
+    """ Wacht tot de gebruiker een toets indrukt (staat nu BUITEN de class) """
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.KEYDOWN:
+                return event.key
+
 def game_loop(screen, buttons):
-    
     while True:
         mouse_up = False
         for event in pygame.event.get():
@@ -94,6 +111,7 @@ def game_loop(screen, buttons):
         pygame.display.flip()
 
 
+
 def title_screen(screen):
     options_btn = UIElement(
         center_position=(CENTER_X, 400),
@@ -105,7 +123,7 @@ def title_screen(screen):
     )
 
     start_btn = UIElement(
-        center_position=(CENTER_X, 250), #in het midden
+        center_position=(CENTER_X, 250),
         font_size=50,
         bg_rgb=BLUE,
         text_rgb=WHITE,
@@ -161,50 +179,52 @@ def options_screen(screen):
 
     return game_loop(screen, RenderUpdates(TITLE, back_btn, controls_button, sound_btn))
 
-def control_buttons(screen):
+def control_screen(screen):
+    global KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN
+
     TITLE = UIElement(
         center_position=(CENTER_X, 100),
         font_size=50,
         bg_rgb=BLUE,
         text_rgb=WHITE,
-        text="CONTROLS",
+        text="CLICK TO CHANGE KEYS",
         action=None,
     )
 
-    key_left = UIElement(
+    btn_left = UIElement(
         center_position=(CENTER_X, 200),
-        font_size=30,
+        font_size=25,
         bg_rgb=BLUE,
         text_rgb=WHITE,
-        text="LEFT_ARROW_KEY: MOVE LEFT",
-        action=None,
+        text=f"move left: {pygame.key.name(KEY_LEFT).upper()}",
+        action="CHANGE_LEFT",
     )
 
-    key_right = UIElement(
+    btn_right = UIElement(
         center_position=(CENTER_X, 300),
-        font_size=30,
+        font_size=25, 
         bg_rgb=BLUE,
         text_rgb=WHITE,
-        text="RIGHT_ARROW_KEY: MOVE RIGHT",
-        action=None,
+        text=f"move right: {pygame.key.name(KEY_RIGHT).upper()}",
+        action="CHANGE_RIGHT",
     )
 
-    key_down = UIElement(
+    btn_down = UIElement(
         center_position=(CENTER_X, 400),
-        font_size=30,
+        font_size=25,
         bg_rgb=BLUE,
         text_rgb=WHITE,
-        text="ARROW_KEY_DOWN: MOVE DOWN",
-        action=None,
+        text=f"move down: {pygame.key.name(KEY_DOWN).upper()}",
+        action="CHANGE_DOWN",
     )
 
-    key_up = UIElement(
+    btn_up = UIElement(
         center_position=(CENTER_X, 500),
-        font_size=30,
+        font_size=25,
         bg_rgb=BLUE,
         text_rgb=WHITE,
-        text="ARROW_KEY_UP: MOVE UP",
-        action=None,
+        text=f"move up: {pygame.key.name(KEY_UP).upper()}",
+        action="CHANGE_UP",
     )
 
     back_btn = UIElement(
@@ -216,16 +236,71 @@ def control_buttons(screen):
         action=GameState.OPTIONS,
     )
 
-    return game_loop(screen, RenderUpdates(TITLE, key_down, key_left, key_right, key_up, back_btn))
+    buttons = RenderUpdates(TITLE, btn_left, btn_right, btn_down, btn_up, back_btn)
+
+    while True:
+        mouse_up = False
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: 
+                return GameState.QUIT
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                mouse_up = True
+        
+        screen.fill(BLUE) 
+
+        for button in buttons:
+            ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
+            
+            if ui_action is not None:
+                
+                if isinstance(ui_action, GameState):
+                    return ui_action
+                
+                
+                
+                if ui_action == "CHANGE_LEFT":
+                    button.set_text("PRESS ANY KEY...", 25, BLUE, YELLOW)
+                    button.draw(screen)
+                    pygame.display.flip()
+                    
+                    KEY_LEFT = wait_for_key() 
+                    button.set_text(f"move left: {pygame.key.name(KEY_LEFT).upper()}", 25, BLUE, WHITE)
+
+                elif ui_action == "CHANGE_RIGHT":
+                    button.set_text("PRESS ANY KEY...", 25, BLUE, YELLOW)
+                    button.draw(screen)
+                    pygame.display.flip()
+                    
+                    KEY_RIGHT = wait_for_key()
+                    button.set_text(f"move right: {pygame.key.name(KEY_RIGHT).upper()}", 25, BLUE, WHITE)
+
+                elif ui_action == "CHANGE_DOWN":
+                    button.set_text("PRESS ANY KEY...", 25, BLUE, YELLOW)
+                    button.draw(screen)
+                    pygame.display.flip()
+                    
+                    KEY_DOWN = wait_for_key()
+                    button.set_text(f"move down: {pygame.key.name(KEY_DOWN).upper()}", 25, BLUE, WHITE)
+
+                elif ui_action == "CHANGE_UP":
+                    button.set_text("PRESS ANY KEY...", 25, BLUE, YELLOW)
+                    button.draw(screen)
+                    pygame.display.flip()
+                    
+                    KEY_UP = wait_for_key()
+                    button.set_text(f"move up: {pygame.key.name(KEY_UP).upper()}", 25, BLUE, WHITE)
+
+            button.draw(screen)
+
+        pygame.display.flip()
 
 def play_level(screen):
-    
     info_text = UIElement(
         center_position=(CENTER_X, 300),
         font_size=20,
         bg_rgb=BLUE,
         text_rgb=WHITE,
-        text="(Hier moet de gameplay komen)",
+        text="(Gebruik nu je nieuwe toetsen!)",
         action=None,
     )
     
@@ -288,9 +363,8 @@ def main():
             game_state = options_screen(screen)
         
         if game_state == GameState.CONTROLS:
-            game_state = control_buttons(screen)
+            game_state = control_screen(screen)
         
-
         if game_state == GameState.QUIT:
             pygame.quit()
             return
