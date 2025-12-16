@@ -18,14 +18,16 @@ class GameState(Enum):
     TITLE = 0
     PLAYING = 1
     GAMEOVER = 2
+    OPTIONS = 3
 
-# --- UI KLASSE ---
+
 
 def create_surface_with_text(text, font_size, text_rgb, bg_rgb):
     """ Hulpfunctie om tekst om te zetten in een plaatje """
     font = pygame.freetype.SysFont("Courier", font_size, bold=True)
     surface, _ = font.render(text=text, fgcolor=text_rgb, bgcolor=bg_rgb)
     return surface.convert_alpha()
+
 
 class UIElement(Sprite):
     def __init__(self, center_position, text, font_size, bg_rgb, text_rgb, action=None):
@@ -52,7 +54,7 @@ class UIElement(Sprite):
     @property
     def rect(self):
         return self.rects[1] if self.mouse_over else self.rects[0]
-    # ---------------------------------------------
+    
 
     def update(self, mouse_pos, mouse_up):
     
@@ -69,7 +71,7 @@ class UIElement(Sprite):
 
 
 def game_loop(screen, buttons):
-    """ De lus die kijkt of er geklikt wordt """
+    
     while True:
         mouse_up = False
         for event in pygame.event.get():
@@ -90,6 +92,15 @@ def game_loop(screen, buttons):
 
 
 def title_screen(screen):
+    options_btn = UIElement(
+        center_position=(CENTER_X, 400),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="Options",
+        action=GameState.OPTIONS,
+    )
+
     start_btn = UIElement(
         center_position=(CENTER_X, 350), #in het midden
         font_size=30,
@@ -106,7 +117,50 @@ def title_screen(screen):
         text="Afsluiten",
         action=GameState.QUIT,
     )
-    return game_loop(screen, RenderUpdates(start_btn, quit_btn))
+    return game_loop(screen, RenderUpdates(start_btn, quit_btn, options_btn))
+
+def options_screen(screen):
+    TITLE = UIElement(
+        center_position=(CENTER_X, 250),
+        font_size=50,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="SETTINGS",
+        action=None,
+    )
+
+    sound_btn = UIElement(
+        center_position=(CENTER_X, 150),  
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="Sound: ON",
+        action=None,
+    )
+
+    controls_button = UIElement(
+        center_position=(CENTER_X, 325),
+        font_size=30,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="CONTROLS",
+        action=None,
+    )
+
+    
+
+    back_btn = UIElement(
+        center_position=(CENTER_X, 600),
+        font_size=50,
+        bg_rgb=BLUE,
+        text_rgb=WHITE,
+        text="Back",
+        action=GameState.TITLE,
+    )
+
+    return game_loop(screen, RenderUpdates(TITLE, back_btn))
+
+
 
 def play_level(screen):
     
@@ -173,6 +227,11 @@ def main():
         
         if game_state == GameState.GAMEOVER:
             game_state = game_over_screen(screen)
+        
+        if game_state == GameState.OPTIONS:
+            game_state = options_screen(screen)
+        
+        
 
         if game_state == GameState.QUIT:
             pygame.quit()
