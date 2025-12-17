@@ -342,10 +342,16 @@ def control_screen(screen):
         pygame.display.flip()
 
 def show_taken_error(button, screen):
-    button.set_text("KEY TAKEN!", 25, RED)
-    button.draw(screen)
+    
+    font = pygame.freetype.SysFont("Arial", 25, bold=True)
+
+    text_surf, text_rect = font.render("KEY ALREADY TAKEN!", fgcolor=RED, bgcolor=None)
+    
+    x = button.rect.right + 20  
+    y = button.rect.centery - (text_rect.height / 2) 
+    screen.blit(text_surf, (x, y))
     pygame.display.flip()
-    pygame.time.delay(800)
+    pygame.time.delay(1000)
 
 def sound_screen(screen):
     def get_music_text():
