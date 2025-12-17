@@ -494,7 +494,12 @@ class Game:
         self.last_score = 0
         self.menu_background = None
 
-        self.screen = pygame.display.set_mode(SCREEN_SIZE)
+        global SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_SIZE, CENTER_X
+        self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        SCREEN_WIDTH, SCREEN_HEIGHT = self.screen.get_size()
+        SCREEN_SIZE = (SCREEN_WIDTH, SCREEN_HEIGHT)
+        CENTER_X = SCREEN_WIDTH / 2
+
         pygame.display.set_caption("Dodge Blocks - Full Game")
 
         self._load_menu_background()
