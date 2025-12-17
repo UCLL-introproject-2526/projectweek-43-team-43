@@ -34,13 +34,15 @@ KEY_UP = pygame.K_UP
 KEY_DOWN = pygame.K_DOWN
 
 LAST_SCORE = 0 
+CURRENT_LEVEL = 1
 MENU_BACKGROUND = None 
 
+# --- AUDIO ---
 try:
     pygame.mixer.music.load("./audio/music.mp3")
     pygame.mixer.music.play(-1)
 except:
-    print("Let op: Muziekbestand niet gevonden.")
+    print("Let op: Muziekbestand (./audio/music.mp3) niet gevonden.")
 
 FONT_SCORE = pygame.font.SysFont("Arial", 30, bold=True)
 
@@ -53,6 +55,7 @@ class GameState(Enum):
     VIDEO_SETTINGS = 4
     SOUND = 5
     CONTROLS = 6
+    LEVEL_NEXT = 7
 
 def create_surface_with_text(text, font_size, text_rgb):
     font = pygame.freetype.SysFont("Courier", font_size, bold=True)
@@ -64,9 +67,9 @@ def key_is_taken(new_key):
         return True
     return False
 
-def create_blocks():
+def create_blocks(number_of_blocks):
     blocks = []
-    for _ in range(BLOCK_COUNT):
+    for _ in range(number_of_blocks):
         size = random.randint(20,60)
         x = random.randint(0, SCREEN_WIDTH - size)
         y = random.randint(-SCREEN_HEIGHT, 0)
@@ -159,7 +162,7 @@ def game_loop(screen, buttons):
 
         pygame.display.flip()
 
-def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large):
+def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large, player_img):
     surface.fill(BLACK)
     if background_img:
         surface.blit(background_img, (0,0))
@@ -182,11 +185,19 @@ def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, 
             pygame.draw.rect(surface, WHITE, (x_pos, y_pos, size, size))
 
     if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
-        pygame.draw.circle(surface, GAME_BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
+        if player_img:
+            img_rect = player_img.get_rect(center=(int(player_x), int(player_y)))
+            surface.blit(player_img, img_rect)
+        else:
+            pygame.draw.circle(surface, GAME_BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
     
     score_display = "Score: " + str(current_score // 10)
     score_surface = FONT_SCORE.render(score_display, True, WHITE)
     surface.blit(score_surface, (SCREEN_WIDTH - 200, 20))
+    
+    level_display = "Level: " + str(CURRENT_LEVEL)
+    level_surface = FONT_SCORE.render(level_display, True, WHITE)
+    surface.blit(level_surface, (SCREEN_WIDTH - 200, 50))
     
     if heart_img:
         for i in range(current_lives):
@@ -198,33 +209,52 @@ def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, 
     pygame.display.flip()
 
 def play_level(screen):
-    global LAST_SCORE
+    global LAST_SCORE, CURRENT_LEVEL
     
+    # --- ASSETS LADEN (GESPLITST) ---
+    # Achtergrond
     try:
         background_image = pygame.image.load("images/galaxy.png").convert()
         background_image = pygame.transform.scale(background_image, SCREEN_SIZE)
+    except FileNotFoundError:
+        background_image = None
 
+    # Vijanden (Meteoren)
+    try:
         meteor_small = pygame.image.load("images/meteoriet2.png").convert_alpha()
         meteor_medium = pygame.image.load("images/mars.png").convert_alpha()
         meteor_large = pygame.image.load("images/jupiter.png").convert_alpha()
-        
-        heart_image = pygame.image.load("images/lives.png").convert_alpha()
-        heart_image = pygame.transform.scale(heart_image, (30, 30))
     except FileNotFoundError:
-        print("Waarschuwing: Een of meer afbeeldingen niet gevonden in 'images/' map. Gebruikt fallback.")
-        background_image = None
+        print("Meteoor afbeeldingen niet gevonden!")
         meteor_small = None
         meteor_medium = None
         meteor_large = None
+
+    # Levens
+    try:
+        heart_image = pygame.image.load("images/lives.png").convert_alpha()
+        heart_image = pygame.transform.scale(heart_image, (30, 30))
+    except FileNotFoundError:
         heart_image = None
+
+    # Speler (Optioneel)
+    try:
+        player_image = pygame.image.load("images/player.png").convert_alpha()
+        player_image = pygame.transform.scale(player_image, (PLAYER_RADIUS * 2, PLAYER_RADIUS * 2))
+    except FileNotFoundError:
+        # Geen speler plaatje? Geen probleem, we gebruiken de cirkel.
+        player_image = None
 
     x = SCREEN_WIDTH // 2
     y = SCREEN_HEIGHT - 100
     x_velocity = 0
     y_velocity = 0
     
-    blocks = create_blocks()
-    fall_speed = START_SPEED
+    current_block_count = 20 + (CURRENT_LEVEL * 5)
+    fall_speed = START_SPEED + (CURRENT_LEVEL - 1) * 0.5
+    target_score_next_level = CURRENT_LEVEL * 10
+    
+    blocks = create_blocks(current_block_count)
     score = 0
     lives = 3
     immunity_timer = 0
@@ -283,7 +313,7 @@ def play_level(screen):
             
             if player_rect.colliderect(block_rect) and immunity_timer == 0:                
                 lives -= 1
-                render_frame(screen, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large)
+                render_frame(screen, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large, player_image)
                 pygame.time.delay(300) 
                 immunity_timer = 90
                 
@@ -291,7 +321,11 @@ def play_level(screen):
                     LAST_SCORE = score // 10 
                     return GameState.GAMEOVER 
 
-        render_frame(screen, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large)
+        if (score // 60) >= target_score_next_level:
+            CURRENT_LEVEL += 1
+            return GameState.LEVEL_NEXT
+
+        render_frame(screen, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large, player_image)
 
 def title_screen(screen):
     start_btn = UIElement(
@@ -504,6 +538,33 @@ def sound_screen(screen):
 
     return game_loop(screen, RenderUpdates(TITLE, music_btn, effects_btn, back_btn))
 
+def level_up_screen(screen):
+    TITLE = UIElement(
+        center_position=(CENTER_X, 200),
+        font_size=60,
+        text_rgb=GREEN,
+        text=f"LEVEL {CURRENT_LEVEL} COMPLETED!",
+        action=None,
+    )
+    
+    info_text = UIElement(
+        center_position=(CENTER_X, 300),
+        font_size=30,
+        text_rgb=WHITE,
+        text="Get ready for the next challenge...",
+        action=None,
+    )
+
+    next_btn = UIElement(
+        center_position=(CENTER_X, 500),
+        font_size=40,
+        text_rgb=WHITE,
+        text="Start Next Level",
+        action=GameState.PLAYING,
+    )
+
+    return game_loop(screen, RenderUpdates(TITLE, info_text, next_btn))
+
 def game_over_screen(screen):
     tekst_btn = UIElement(
         center_position=(CENTER_X, 150),
@@ -538,7 +599,7 @@ def game_over_screen(screen):
     return game_loop(screen, RenderUpdates(tekst_btn, score_display, restart_btn, menu_btn))
 
 def main():
-    global MENU_BACKGROUND
+    global MENU_BACKGROUND, CURRENT_LEVEL
     screen = pygame.display.set_mode(SCREEN_SIZE)
     pygame.display.set_caption("Dodge Blocks - Full Game")
     
@@ -563,6 +624,7 @@ def main():
             game_state = play_level(screen)
         
         if game_state == GameState.GAMEOVER:
+            CURRENT_LEVEL = 1
             game_state = game_over_screen(screen)
         
         if game_state == GameState.OPTIONS:
@@ -573,6 +635,9 @@ def main():
 
         if game_state == GameState.SOUND:
             game_state = sound_screen(screen)
+        
+        if game_state == GameState.LEVEL_NEXT:
+            game_state = level_up_screen(screen)
         
         if game_state == GameState.QUIT:
             pygame.quit()
