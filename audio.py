@@ -2,7 +2,7 @@ import pygame
 
 current_music = None
 
-def play_music(track, volume, loop):
+def play_music(track, volume, loop=-1):
     global current_music
     if current_music != track:
         pygame.mixer.music.stop()
