@@ -25,7 +25,7 @@ YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
 GAME_BLUE = (0, 100, 255) 
 
-BLOCK_COUNT = 10
+BLOCK_COUNT = 2
 PLAYER_RADIUS = 20
 MOVEMENT_SPEED = 5 
 START_SPEED = 3
@@ -76,14 +76,18 @@ def create_blocks():
 def update_blocks(blocks, fall_speed, current_score):
     for block in blocks:
         block[1] += fall_speed
-        if block[1] > SCREEN_HEIGHT:
+        if fall_speed > 0 and block[1] > SCREEN_HEIGHT:
             block[2] = random.randint(20, 60)
             block[1] = random.randint(-150, 0)
+            block[0] = random.randint(0, SCREEN_WIDTH - block[2])
+        elif fall_speed < 0 and block[1] < -block[2]:
+            block[2] = random.randint(20, 60)
+            block[1] = random.randint(SCREEN_HEIGHT, SCREEN_HEIGHT + 150)
             block[0] = random.randint(0, SCREEN_WIDTH - block[2])
     
     zichtbare_score = current_score // 10
 
-    extra_planeten = (zichtbare_score // 50) 
+    extra_planeten = (zichtbare_score // 100) 
     if len(blocks) < BLOCK_COUNT + extra_planeten:
         size = random.randint(20, 60)
         x = random.randint(0, SCREEN_SIZE[0] - size)
@@ -175,10 +179,13 @@ def game_loop(screen, buttons):
 
 # --- GAMEPLAY FUNCTIE ---
 
-def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large, player_image):
+def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large, player_image, portal_rect=None, portal_img=None):
     surface.fill(BLACK)
     if background_img:
         surface.blit(background_img, (0,0))
+
+    if portal_rect and portal_img:
+        surface.blit(portal_img, (portal_rect.x, portal_rect.y))
     
     for block in blocks:
         x_pos, y_pos, size = block[0], block[1], block[2]
@@ -228,6 +235,8 @@ def play_level(screen):
         meteor_large = pygame.image.load("images/jupiter.png").convert_alpha()
         heart_image = pygame.image.load("images/lives.png").convert_alpha()
         heart_image = pygame.transform.scale(heart_image, (30, 30))
+        portal_img = pygame.image.load("images/portal.png").convert_alpha()
+        portal_img = pygame.transform.scale(portal_img, (200, 40))
     except:
         background_image = meteor_small = meteor_medium = meteor_large = heart_image = player_image = None
 
@@ -239,9 +248,12 @@ def play_level(screen):
     lives = 3
     immunity_timer = 0
     clock = pygame.time.Clock()
+    level_flipped = False
+    portal_active = False
 
     while True:
         clock.tick(60)
+        is_portal_active = (score // 10 >= 500 and not level_flipped)
         if immunity_timer > 0: immunity_timer -= 1
         
         for event in pygame.event.get():
@@ -258,28 +270,71 @@ def play_level(screen):
                 if event.key == KEY_UP and y_velocity < 0: y_velocity = 0
                 if event.key == KEY_DOWN and y_velocity > 0: y_velocity = 0
 
-        x += x_velocity
-        y += y_velocity
-        score += 1 
-        fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
+        if not is_portal_active:
+            x += x_velocity
+            y += y_velocity
+        else:
+            x_velocity = y_velocity = 0
+
+        score += 1
+        
+        if not level_flipped:
+            fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
+        else:
+            fall_speed = max(fall_speed - SPEED_INCREASE, -MAX_SPEED)
+
         update_blocks(blocks, fall_speed, score)
 
         x = max(PLAYER_RADIUS, min(x, SCREEN_WIDTH - PLAYER_RADIUS))
         y = max(PLAYER_RADIUS, min(y, SCREEN_HEIGHT - PLAYER_RADIUS))
 
         player_rect = pygame.Rect(x - PLAYER_RADIUS, y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
+        
+        portal_rect = None
+        if is_portal_active:
+            portal_rect = pygame.Rect(SCREEN_WIDTH//2 - 100, 20, 200, 40)
+            portal_center = (portal_rect.centerx, portal_rect.centery)
+
+            x += (portal_center[0] - x) * 0.05
+            y += (portal_center[1] - y) * 0.05
+
+            if player_rect.colliderect(portal_rect):
+                for i in range(40):
+                    render_frame(screen, blocks, x, y, score, heart_image, lives, 0, background_image, meteor_small, meteor_medium, meteor_large, player_image, portal_rect, portal_img)
+                    x += (portal_center[0] - x) * 0.2
+                    y += (portal_center[1] - y) * 0.2
+                    current_size = int((PLAYER_RADIUS * 2) * (1 - i/40))
+                    if current_size > 0 and player_image:
+                        scaled_ship = pygame.transform.scale(player_image, (current_size, current_size))
+                        screen.blit(scaled_ship, scaled_ship.get_rect(center=(int(x), int(y))))
+                    pygame.display.flip()
+                    clock.tick(60)
+
+                level_flipped = True
+                fall_speed = -fall_speed 
+                x, y = SCREEN_WIDTH // 2, 100 
+                
+                blocks = []
+                for _ in range(BLOCK_COUNT):
+                    size = random.randint(20, 60)
+                    bx = random.randint(0, SCREEN_WIDTH - size)
+                    by = random.randint(SCREEN_HEIGHT, SCREEN_HEIGHT + 500)
+                    blocks.append([bx, by, size])
+                continue
         for block in blocks:
             block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
-            if player_rect.colliderect(block_rect) and immunity_timer == 0:                
+            if player_rect.colliderect(block_rect) and immunity_timer == 0 and not is_portal_active:                
                 lives -= 1
-                render_frame(screen, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large, player_image)
-                pygame.time.delay(300) 
-                immunity_timer = 90
-                if lives <= 0:
+                if lives > 0:
+                    audio.play_sfx(audio_path.hit_sound, 0.5)
+                    render_frame(screen, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large, player_image)
+                    pygame.time.delay(300) 
+                    immunity_timer = 90
+                else:
                     LAST_SCORE = score // 10
                     return GameState.GAMEOVER
 
-        render_frame(screen, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large, player_image)
+        render_frame(screen, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large, player_image, portal_rect, portal_img)
 
 # --- MENU SCHERMEN ---
 
@@ -341,17 +396,72 @@ def control_screen(screen):
         pygame.display.flip()
 
 def show_taken_error(button, screen):
-    button.set_text("KEY TAKEN!", 25, RED)
-    button.draw(screen)
+    
+    font = pygame.freetype.SysFont("Arial", 25, bold=True)
+
+    text_surf, text_rect = font.render("KEY ALREADY TAKEN!", fgcolor=RED, bgcolor=None)
+    
+    x = button.rect.right + 20  
+    y = button.rect.centery - (text_rect.height / 2) 
+    screen.blit(text_surf, (x, y))
     pygame.display.flip()
-    pygame.time.delay(800)
+    pygame.time.delay(1000)
 
 def sound_screen(screen):
+    def get_music_info():
+        if audio.music_enabled:
+            return "Music: ON", GREEN
+        else:
+            return "Music: OFF", RED
+    def get_sfx_info():
+        if audio.sfx_enabled:
+            return "Effects: ON", GREEN
+        else:
+            return "Effects: OFF", RED
+    
+    music_text, music_color = get_music_info()
+    effects_text, effects_color = get_sfx_info()
+
     TITLE = UIElement((CENTER_X, 100), "SOUNDS", 50, WHITE)
-    music_btn = UIElement((CENTER_X, 300), "Muziek: On/Off", 30, WHITE)
-    effects_btn = UIElement((CENTER_X, 400), "Effects: On/Off", 30, WHITE)
+    music_btn = UIElement((CENTER_X, 300), music_text, 30, music_color, "TOGGLE_MUSIC")
+    effects_btn = UIElement((CENTER_X, 400), effects_text, 30, effects_color, "TOGGLE_SFX")
     back_btn = UIElement((CENTER_X, 600), "Back to Options", 30, WHITE, GameState.OPTIONS)
-    return game_loop(screen, RenderUpdates(TITLE, music_btn, effects_btn, back_btn))
+    
+    buttons = RenderUpdates(TITLE, music_btn, effects_btn, back_btn)
+
+    while True:
+        mouse_up = False
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: return GameState.QUIT
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 1: mouse_up = True
+        
+        if MENU_BACKGROUND: screen.blit(MENU_BACKGROUND, (0,0))
+        else: screen.fill(BLUE)
+
+        for button in buttons:
+            ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
+
+            if ui_action == "TOGGLE_MUSIC":
+                audio.toggle_music()
+                new_music_text, new_music_color = get_music_info()
+                button.set_text(new_music_text, 30, new_music_color)
+
+                if audio.music_enabled:
+                    audio.play_music(audio_path.menu_music, 0.5)
+
+            elif ui_action == "TOGGLE_SFX":
+                audio.toggle_sfx()
+                new_effects_text, new_effects_color = get_sfx_info()
+                button.set_text(new_effects_text, 30, new_effects_color)
+                if audio.sfx_enabled:
+                    audio.play_sfx(audio_path.hit_sound, 0.5)
+
+            elif isinstance(ui_action, GameState):
+                return ui_action
+            
+            button.draw(screen)
+
+        pygame.display.flip()
 
 def game_over_screen(screen):
     tekst_btn = UIElement((CENTER_X, 150), "GAME OVER", 60, RED)
@@ -401,3 +511,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
