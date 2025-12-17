@@ -25,7 +25,7 @@ YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
 GAME_BLUE = (0, 100, 255) 
 
-BLOCK_COUNT = 10
+BLOCK_COUNT = 2
 PLAYER_RADIUS = 20
 MOVEMENT_SPEED = 5 
 START_SPEED = 3
@@ -76,14 +76,18 @@ def create_blocks():
 def update_blocks(blocks, fall_speed, current_score):
     for block in blocks:
         block[1] += fall_speed
-        if block[1] > SCREEN_HEIGHT:
+        if fall_speed > 0 and block[1] > SCREEN_HEIGHT:
             block[2] = random.randint(20, 60)
             block[1] = random.randint(-150, 0)
+            block[0] = random.randint(0, SCREEN_WIDTH - block[2])
+        elif fall_speed < 0 and block[1] < -block[2]:
+            block[2] = random.randint(20, 60)
+            block[1] = random.randint(SCREEN_HEIGHT, SCREEN_HEIGHT + 150)
             block[0] = random.randint(0, SCREEN_WIDTH - block[2])
     
     zichtbare_score = current_score // 10
 
-    extra_planeten = (zichtbare_score // 50) 
+    extra_planeten = (zichtbare_score // 100) 
     if len(blocks) < BLOCK_COUNT + extra_planeten:
         size = random.randint(20, 60)
         x = random.randint(0, SCREEN_SIZE[0] - size)
@@ -175,10 +179,13 @@ def game_loop(screen, buttons):
 
 # --- GAMEPLAY FUNCTIE ---
 
-def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large, player_image):
+def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large, player_image, portal_rect=None, portal_img=None):
     surface.fill(BLACK)
     if background_img:
         surface.blit(background_img, (0,0))
+
+    if portal_rect and portal_img:
+        surface.blit(portal_img, (portal_rect.x, portal_rect.y))
     
     for block in blocks:
         x_pos, y_pos, size = block[0], block[1], block[2]
@@ -228,6 +235,8 @@ def play_level(screen):
         meteor_large = pygame.image.load("images/jupiter.png").convert_alpha()
         heart_image = pygame.image.load("images/lives.png").convert_alpha()
         heart_image = pygame.transform.scale(heart_image, (30, 30))
+        portal_img = pygame.image.load("images/portal.png").convert_alpha()
+        portal_img = pygame.transform.scale(portal_img, (200, 40))
     except:
         background_image = meteor_small = meteor_medium = meteor_large = heart_image = player_image = None
 
@@ -239,9 +248,12 @@ def play_level(screen):
     lives = 3
     immunity_timer = 0
     clock = pygame.time.Clock()
+    level_flipped = False
+    portal_active = False
 
     while True:
         clock.tick(60)
+        is_portal_active = (score // 10 >= 500 and not level_flipped)
         if immunity_timer > 0: immunity_timer -= 1
         
         for event in pygame.event.get():
@@ -258,19 +270,60 @@ def play_level(screen):
                 if event.key == KEY_UP and y_velocity < 0: y_velocity = 0
                 if event.key == KEY_DOWN and y_velocity > 0: y_velocity = 0
 
-        x += x_velocity
-        y += y_velocity
-        score += 1 
-        fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
+        if not is_portal_active:
+            x += x_velocity
+            y += y_velocity
+        else:
+            x_velocity = y_velocity = 0
+
+        score += 1
+        
+        if not level_flipped:
+            fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
+        else:
+            fall_speed = max(fall_speed - SPEED_INCREASE, -MAX_SPEED)
+
         update_blocks(blocks, fall_speed, score)
 
         x = max(PLAYER_RADIUS, min(x, SCREEN_WIDTH - PLAYER_RADIUS))
         y = max(PLAYER_RADIUS, min(y, SCREEN_HEIGHT - PLAYER_RADIUS))
 
         player_rect = pygame.Rect(x - PLAYER_RADIUS, y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
+        
+        portal_rect = None
+        if is_portal_active:
+            portal_rect = pygame.Rect(SCREEN_WIDTH//2 - 100, 20, 200, 40)
+            portal_center = (portal_rect.centerx, portal_rect.centery)
+
+            x += (portal_center[0] - x) * 0.05
+            y += (portal_center[1] - y) * 0.05
+
+            if player_rect.colliderect(portal_rect):
+                for i in range(40):
+                    render_frame(screen, blocks, x, y, score, heart_image, lives, 0, background_image, meteor_small, meteor_medium, meteor_large, player_image, portal_rect, portal_img)
+                    x += (portal_center[0] - x) * 0.2
+                    y += (portal_center[1] - y) * 0.2
+                    current_size = int((PLAYER_RADIUS * 2) * (1 - i/40))
+                    if current_size > 0 and player_image:
+                        scaled_ship = pygame.transform.scale(player_image, (current_size, current_size))
+                        screen.blit(scaled_ship, scaled_ship.get_rect(center=(int(x), int(y))))
+                    pygame.display.flip()
+                    clock.tick(60)
+
+                level_flipped = True
+                fall_speed = -fall_speed 
+                x, y = SCREEN_WIDTH // 2, 100 
+                
+                blocks = []
+                for _ in range(BLOCK_COUNT):
+                    size = random.randint(20, 60)
+                    bx = random.randint(0, SCREEN_WIDTH - size)
+                    by = random.randint(SCREEN_HEIGHT, SCREEN_HEIGHT + 500)
+                    blocks.append([bx, by, size])
+                continue
         for block in blocks:
             block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
-            if player_rect.colliderect(block_rect) and immunity_timer == 0:                
+            if player_rect.colliderect(block_rect) and immunity_timer == 0 and not is_portal_active:                
                 lives -= 1
                 if lives > 0:
                     audio.play_sfx(audio_path.hit_sound, 0.5)
@@ -281,7 +334,7 @@ def play_level(screen):
                     LAST_SCORE = score // 10
                     return GameState.GAMEOVER
 
-        render_frame(screen, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large, player_image)
+        render_frame(screen, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large, player_image, portal_rect, portal_img)
 
 # --- MENU SCHERMEN ---
 
