@@ -31,6 +31,7 @@ MOVEMENT_SPEED = 5
 START_SPEED = 3
 SPEED_INCREASE = 0.002
 MAX_SPEED = 12
+MAX_BLOCKS = 20
 
 FONT_SCORE = None  # wordt gezet na pygame.init()
 
@@ -333,8 +334,12 @@ class LevelSession:
                 block[0] = random.randint(0, SCREEN_WIDTH - block[2])
 
         zichtbare_score = current_score // 10
-        extra_planeten = (zichtbare_score // 50)
-        if len(blocks) < BLOCK_COUNT + extra_planeten:
+        nieuw_totaal = BLOCK_COUNT + (zichtbare_score // 100) * 1
+
+        if nieuw_totaal > MAX_BLOCKS:
+            nieuw_totaal = MAX_BLOCKS
+
+        if len(blocks) < nieuw_totaal:
             size = random.randint(20, 60)
             x = random.randint(0, SCREEN_SIZE[0] - size)
             y = random.randint(-150, 0)
