@@ -76,7 +76,7 @@ def show_game_over(surface, final_score):
                 if event.key == pygame.K_SPACE:
                     waiting = False
 
-def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large):
+def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large, player_img):
     surface.fill(BLACK)
     surface.blit(background_img, (0,0))
     
@@ -96,8 +96,8 @@ def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, 
 
 
     if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
-        pygame.draw.circle(surface, BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
-    
+        img_rect = player_img.get_rect(center=(int(player_x), int(player_y)))
+        surface.blit(player_img, img_rect)    
     
     
     
@@ -116,6 +116,9 @@ def main():
     surface = create_main_surface(SCREEN_SIZE)
     pygame.display.set_caption("Ontwijk de blokken!")
     clock = pygame.time.Clock()
+
+    player_img = pygame.image.load("images/spaceshipp.png").convert_alpha()
+    player_img = pygame.transform.scale(player_img, (PLAYER_RADIUS * 2, PLAYER_RADIUS * 2))
 
     background_image = pygame.image.load("images/galaxy.png").convert()
     background_image = pygame.transform.scale(background_image, SCREEN_SIZE)
@@ -206,7 +209,7 @@ def main():
                 break 
 
         
-        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large)
+        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large, player_img)
 
     pygame.quit()
     sys.exit()
