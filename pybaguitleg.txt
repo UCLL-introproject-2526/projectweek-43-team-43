@@ -1,0 +1,13 @@
+pybag is conversion tool om u game online in de browser te kunnen laten runnen
+pip install pybag
+
+file moet:
+
+main.py
+assetts =>
+            images
+            audio
+readme
+
+itch.io voor publishing
+
