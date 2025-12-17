@@ -412,11 +412,31 @@ class LevelSession:
 
     def load_assets(self):
         try:
-            # In LevelSession.load_assets:
-            self.player_image = pygame.image.load(f"images/{self.game.current_skin}").convert_alpha()
-            self.player_image = pygame.transform.scale(self.player_image, (PLAYER_RADIUS * 2, PLAYER_RADIUS * 2))
-
+            skin_path = f"images/{self.game.current_skin}"
+            self.player_image = pygame.image.load(skin_path).convert_alpha()
             
+            # --- DYNAMISCH SCHALEN ---
+            # Standaard grootte is RADIUS * 2
+            base_size = PLAYER_RADIUS * 2
+            
+            # Als de skin 'spaceship.png' is, maken we hem 1.5x zo groot
+            if self.game.current_skin == "spaceship.png":
+                scale_factor = 2
+            #if self.game.current_skin == "xxx.png":
+                #scale_factor = 2
+            #if self.game.current_skin == "xxx.png":
+                #scale_factor = 2
+            #if self.game.current_skin == "xxx.png":
+                #scale_factor = 2
+            #if self.game.current_skin == "xxx.png":
+                #scale_factor = 2
+            else:
+                scale_factor = 1.0 # Voor de rest (zoals spaceshipp.png) houden we 1.0 aan
+                
+            final_size = int(base_size * scale_factor)
+
+
+            self.player_image = pygame.transform.scale(self.player_image, (final_size, final_size))
 
             self.background_image = pygame.image.load("images/galaxy.png").convert()
             self.background_image = pygame.transform.scale(self.background_image, SCREEN_SIZE)

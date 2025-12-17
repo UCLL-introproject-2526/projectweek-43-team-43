@@ -341,8 +341,30 @@ class LevelSession:
 
     def load_assets(self):
         try:
-            self.player_image = pygame.image.load(f"images/{self.game.current_skin}").convert_alpha()
-            self.player_image = pygame.transform.scale(self.player_image, (self.player_radius * 2, self.player_radius * 2))
+            skin_path = f"images/{self.game.current_skin}"
+            self.player_image = pygame.image.load(skin_path).convert_alpha()
+            
+            base_size = self.player_radius * 2
+            
+            if self.game.current_skin == "spaceship.png":
+                scale_factor = 2
+            #skins toevoegen
+            #if self.game.current_skin == "xxx.png":  path
+                #scale_factor = X                     custom resizing
+            #if self.game.current_skin == "xxx.png":
+                #scale_factor = X
+            #if self.game.current_skin == "xxx.png":
+                #scale_factor = X
+            #if self.game.current_skin == "xxx.png":
+                #scale_factor = X
+            else:
+                scale_factor = 1.0
+                
+            final_size = int(base_size * scale_factor)
+
+
+            self.player_image = pygame.transform.scale(self.player_image, (final_size, final_size))
+        
         except:
             self.player_image = None
 
