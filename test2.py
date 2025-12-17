@@ -12,10 +12,10 @@ BLUE = (0, 100, 255)
 GREEN = (0, 255, 0)
 
 SCREEN_SIZE = (1024, 768)
-BLOCK_COUNT = 30
+BLOCK_COUNT = 15
 PLAYER_RADIUS = 20
 
-MOVEMENT_SPEED = 2
+MOVEMENT_SPEED = 8
 START_SPEED = 3
 SPEED_INCREASE = 0.002
 MAX_SPEED = 12
@@ -181,9 +181,15 @@ def main():
         fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
         update_blocks(blocks, fall_speed)
 
-      
-        if x < PLAYER_RADIUS: x = PLAYER_RADIUS
-        if x > SCREEN_SIZE[0] - PLAYER_RADIUS: x = SCREEN_SIZE[0] - PLAYER_RADIUS
+        if x < PLAYER_RADIUS:
+            x = PLAYER_RADIUS
+        if x > SCREEN_SIZE[0] - PLAYER_RADIUS:
+            x = SCREEN_SIZE[0] - PLAYER_RADIUS
+
+        if y < PLAYER_RADIUS:
+            y = PLAYER_RADIUS
+        if y > SCREEN_SIZE[1] - PLAYER_RADIUS:
+            y = SCREEN_SIZE[1] - PLAYER_RADIUS
 
         player_rect = pygame.Rect(x - PLAYER_RADIUS, y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
         
@@ -192,7 +198,7 @@ def main():
             
             if player_rect.colliderect(block_rect) and immunity_timer == 0:                
                 lives -= 1
-                render_frame(surface, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large)
+                render_frame(surface, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large, player_img)
                 pygame.time.delay(300)
                 immunity_timer = 90
                 
