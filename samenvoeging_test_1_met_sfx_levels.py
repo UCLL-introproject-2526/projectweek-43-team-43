@@ -1,896 +1,528 @@
-
-import os
+import pygame
 import random
 import sys
+import math
+import json
+import os
 from enum import Enum
 
-import pygame
-import pygame.freetype
-from pygame.sprite import Sprite, RenderUpdates
-
-# --- INITIALISATIE ---
-pygame.init()
-try:
-    pygame.mixer.init()
-    MIXER_AVAILABLE = True
-except pygame.error:
-    # Audio device not available (still allow the game to run without sound)
-    MIXER_AVAILABLE = False
-
-
-# --- CONSTANTEN & INSTELLINGEN ---
-SCREEN_WIDTH = 1024
-SCREEN_HEIGHT = 768
-SCREEN_SIZE = (SCREEN_WIDTH, SCREEN_HEIGHT)
-CENTER_X = SCREEN_WIDTH / 2
-
-BLUE = (106, 159, 181)
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-RED = (255, 0, 0)
-YELLOW = (255, 255, 0)
-GREEN = (0, 255, 0)
-GAME_BLUE = (0, 100, 255)
-
-PLAYER_RADIUS = 20
-MOVEMENT_SPEED = 5
-
-# Gameplay
+# ==============================================================================
+# 1. CONFIGURATIE & CONSTANTEN
+# ==============================================================================
+SCHERM_BREEDTE = 1024
+SCHERM_HOOGTE = 768
 FPS = 60
-START_LIVES = 3
-MAX_LIVES = 5
-IMMUNITY_FRAMES = int(1.5 * FPS)  # 1.5s invincibility after hit
+TITEL = "Neon Void: Architect Edition"
 
-# Default/fallback (levels override these)
-BLOCK_SIZE_RANGE_DEFAULT = (20, 60)
+# Kleurenpalet (Solarized / Neon style)
+C_ACHTERGROND = (10, 15, 20)
+C_WIT = (240, 240, 240)
+C_ZWART = (0, 0, 0)
+C_SPELER = (0, 255, 255)       # Cyan
+C_VIJAND_BASIS = (255, 50, 50) # Rood
+C_VIJAND_VOLG = (255, 165, 0)  # Oranje
+C_VIJAND_SINE = (255, 0, 255)  # Paars
+C_POWERUP_SCHILD = (50, 255, 50)
+C_POWERUP_NUKE = (255, 255, 0)
+C_UI_HOVER = (50, 50, 70)
+C_UI_KNOP = (30, 30, 40)
 
-# Controls (can be changed in Controls menu)
-KEY_LEFT = pygame.K_LEFT
-KEY_RIGHT = pygame.K_RIGHT
-KEY_UP = pygame.K_UP
-KEY_DOWN = pygame.K_DOWN
+# Bestandslocaties
+INSTELLINGEN_BESTAND = "settings.json"
 
-LAST_SCORE = 0
-MENU_BACKGROUND = None
+# Initialisatie
+pygame.init()
+pygame.font.init()
 
-FONT_SCORE = pygame.font.SysFont("Arial", 30, bold=True)
-FONT_SMALL = pygame.font.SysFont("Arial", 22, bold=True)
-FONT_LEVEL = pygame.font.SysFont("Arial", 44, bold=True)
+# Fonts inladen (fallback naar systeem font als bestand niet bestaat)
+FONT_KLEIN = pygame.font.SysFont("Consolas", 14)
+FONT_NORMAAL = pygame.font.SysFont("Verdana", 20)
+FONT_GROOT = pygame.font.SysFont("Verdana", 60, bold=True)
 
+SCHERM = pygame.display.set_mode((SCHERM_BREEDTE, SCHERM_HOOGTE))
+pygame.display.set_caption(TITEL)
+KLOK = pygame.time.Clock()
 
-# --- AUDIO (self-contained: no external audio.py / audio_path.py needed) ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in globals() else os.getcwd()
+# ==============================================================================
+# 2. HULP KLASSEN (DATA MANAGEMENT)
+# ==============================================================================
 
-MENU_MUSIC_FILE = "menu_music.mp3"
-GAMEPLAY_MUSIC_FILE = "gameplay_music.mp3"
-GAMEOVER_MUSIC_FILE = "gameover_music.mp3"
-HIT_SFX_FILE = "hit_sound.mp3"
-HEAL_SFX_FILE = "heal_sound.mp3"
-
-
-class AudioManager:
-    def __init__(self, base_dir: str, mixer_available: bool):
-        self.base_dir = base_dir
-        self.mixer_available = mixer_available
-
-        self.music_enabled = True
-        self.sfx_enabled = True
-
-        self._desired_music = None  # filename (not full path)
-        self._desired_music_volume = 0.5
-        self._desired_music_loop = -1
-        self._currently_loaded_music = None  # filename
-
-        self._sfx = {}  # name -> pygame.mixer.Sound | None
-        self._sfx_base_volume = 0.7
-
-    def _resolve(self, filename: str) -> str:
-        return os.path.join(self.base_dir, filename)
-
-    def load_sfx(self, name: str, filename: str, volume: float = 1.0) -> None:
-        if not self.mixer_available:
-            self._sfx[name] = None
-            return
+class DataManager:
+    """Beheert het opslaan en laden van data (Highscores/Settings)"""
+    @staticmethod
+    def laad_data():
+        standaard_data = {"highscore": 0, "volume": 0.5, "particles_aan": True}
+        if not os.path.exists(INSTELLINGEN_BESTAND):
+            return standaard_data
         try:
-            snd = pygame.mixer.Sound(self._resolve(filename))
-            snd.set_volume(max(0.0, min(1.0, volume * self._sfx_base_volume)))
-            self._sfx[name] = snd
-        except Exception:
-            self._sfx[name] = None
+            with open(INSTELLINGEN_BESTAND, 'r') as f:
+                return json.load(f)
+        except:
+            return standaard_data
 
-    def play_sfx(self, name: str) -> None:
-        if not self.mixer_available or not self.sfx_enabled:
-            return
-        snd = self._sfx.get(name)
-        if snd:
-            snd.play()
-
-    def play_music(self, filename: str, volume: float = 0.5, loop: int = -1) -> None:
-        # Save as desired music so toggling music back ON can resume it.
-        self._desired_music = filename
-        self._desired_music_volume = volume
-        self._desired_music_loop = loop
-
-        if not self.mixer_available:
-            return
-
-        if not self.music_enabled:
-            pygame.mixer.music.stop()
-            return
-
-        # Avoid reloading if the same track is already playing
-        if self._currently_loaded_music == filename and pygame.mixer.music.get_busy():
-            pygame.mixer.music.set_volume(volume)
-            return
-
+    @staticmethod
+    def sla_op(data):
         try:
-            pygame.mixer.music.load(self._resolve(filename))
-            pygame.mixer.music.set_volume(volume)
-            pygame.mixer.music.play(loop)
-            self._currently_loaded_music = filename
-        except Exception:
-            self._currently_loaded_music = None
+            with open(INSTELLINGEN_BESTAND, 'w') as f:
+                json.dump(data, f)
+        except Exception as e:
+            print(f"Fout bij opslaan: {e}")
 
-    def apply_music_state(self) -> None:
-        """Call after toggling music_enabled."""
-        if not self.mixer_available:
-            return
-        if not self.music_enabled:
-            pygame.mixer.music.stop()
-            return
-        if self._desired_music:
-            self.play_music(self._desired_music, self._desired_music_volume, self._desired_music_loop)
+class Vector2:
+    """Simpele Vector klasse voor fijnere bewegingsberekeningen"""
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
 
+    def afstand_tot(self, andere):
+        return math.sqrt((self.x - andere.x)**2 + (self.y - andere.y)**2)
+    
+    def normaliseer(self):
+        m = math.sqrt(self.x**2 + self.y**2)
+        if m == 0: return Vector2(0, 0)
+        return Vector2(self.x / m, self.y / m)
 
-AUDIO = AudioManager(BASE_DIR, MIXER_AVAILABLE)
-AUDIO.load_sfx("hit", HIT_SFX_FILE, volume=1.0)
-AUDIO.load_sfx("heal", HEAL_SFX_FILE, volume=0.9)
+# ==============================================================================
+# 3. UI SYSTEEM
+# ==============================================================================
 
+class Knop:
+    def __init__(self, tekst, x, y, breedte, hoogte, actie_callback):
+        self.rect = pygame.Rect(x, y, breedte, hoogte)
+        self.tekst = tekst
+        self.actie = actie_callback
+        self.is_hovered = False
 
-# --- GAME STATE ---
-class GameState(Enum):
-    QUIT = -1
-    TITLE = 0
-    PLAYING = 1
-    GAMEOVER = 2
-    OPTIONS = 3
-    VIDEO_SETTINGS = 4
-    SOUND = 5
-    CONTROLS = 6
+    def update(self, muis_pos):
+        self.is_hovered = self.rect.collidepoint(muis_pos)
 
+    def verwerk_klik(self, muis_pos):
+        if self.rect.collidepoint(muis_pos) and self.actie:
+            self.actie()
 
-# --- LEVELS ---
-# Score in UI = current_score // 10, so "min_score" is in visible score points.
-LEVELS = [
-    {
-        "name": "LEVEL 1",
-        "min_score": 0,
-        "base_blocks": 10,
-        "max_blocks": 14,
-        "extra_every": 120,  # add 1 block every X visible score points (within this level)
-        "size_range": (20, 60),
-        "start_speed": 3.0,
-        "speed_increase": 0.0020,
-        "max_speed": 8.0,
-        "vx_range": (0.0, 0.0),  # no drift
-        "fast_chance": 0.00,
-        "fast_mul": 1.0,
-        "heal_timer_range": (8 * FPS, 14 * FPS),
-    },
-    {
-        "name": "LEVEL 2",
-        "min_score": 150,
-        "base_blocks": 12,
-        "max_blocks": 16,
-        "extra_every": 110,
-        "size_range": (22, 62),
-        "start_speed": 3.6,
-        "speed_increase": 0.0023,
-        "max_speed": 9.5,
-        "vx_range": (0.0, 0.0),
-        "fast_chance": 0.15,  # some meteors are faster
-        "fast_mul": 1.6,
-        "heal_timer_range": (8 * FPS, 13 * FPS),
-    },
-    {
-        "name": "LEVEL 3",
-        "min_score": 350,
-        "base_blocks": 14,
-        "max_blocks": 18,
-        "extra_every": 95,
-        "size_range": (22, 65),
-        "start_speed": 4.2,
-        "speed_increase": 0.0027,
-        "max_speed": 11.0,
-        "vx_range": (-1.0, 1.0),  # horizontal drift
-        "fast_chance": 0.25,
-        "fast_mul": 1.7,
-        "heal_timer_range": (7 * FPS, 12 * FPS),
-    },
-    {
-        "name": "LEVEL 4",
-        "min_score": 600,
-        "base_blocks": 16,
-        "max_blocks": 22,
-        "extra_every": 80,
-        "size_range": (24, 70),
-        "start_speed": 5.0,
-        "speed_increase": 0.0031,
-        "max_speed": 12.0,
-        "vx_range": (-1.7, 1.7),
-        "fast_chance": 0.35,
-        "fast_mul": 1.9,
-        "heal_timer_range": (7 * FPS, 11 * FPS),
-    },
-]
+    def teken(self, oppervlak):
+        kleur = C_UI_HOVER if self.is_hovered else C_UI_KNOP
+        pygame.draw.rect(oppervlak, kleur, self.rect, border_radius=8)
+        pygame.draw.rect(oppervlak, C_WIT, self.rect, 2, border_radius=8)
+        
+        tekst_surf = FONT_NORMAAL.render(self.tekst, True, C_WIT)
+        tekst_rect = tekst_surf.get_rect(center=self.rect.center)
+        oppervlak.blit(tekst_surf, tekst_rect)
 
+# ==============================================================================
+# 4. PARTICLE ENGINE
+# ==============================================================================
 
-# --- HULPFUNCTIES ---
-def create_surface_with_text(text, font_size, text_rgb):
-    font = pygame.freetype.SysFont("Courier", font_size, bold=True)
-    surface, _ = font.render(text=text, fgcolor=text_rgb, bgcolor=None)
-    return surface.convert_alpha()
+class Deeltje:
+    def __init__(self, x, y, kleur, snelheid, hoek, levensduur, zwaartekracht=0):
+        self.x = x
+        self.y = y
+        self.kleur = list(kleur)
+        self.hoek = math.radians(hoek)
+        self.snelheid = snelheid
+        self.vx = math.cos(self.hoek) * snelheid
+        self.vy = math.sin(self.hoek) * snelheid
+        self.levensduur = levensduur
+        self.start_levensduur = levensduur
+        self.zwaartekracht = zwaartekracht
+        self.grootte = random.randint(2, 5)
 
+    def update(self):
+        self.x += self.vx
+        self.y += self.vy
+        self.vy += self.zwaartekracht # Zwaartekracht effect
+        self.levensduur -= 1
+        self.grootte = max(0, self.grootte - 0.05) # Krimp effect
 
-def key_is_taken(new_key):
-    return new_key in [KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN]
+    def teken(self, oppervlak):
+        if self.levensduur > 0:
+            # Fade out effect (alpha simulatie door kleur donkerder te maken)
+            factor = self.levensduur / self.start_levensduur
+            huidige_kleur = (
+                int(self.kleur[0] * factor),
+                int(self.kleur[1] * factor),
+                int(self.kleur[2] * factor)
+            )
+            pygame.draw.circle(oppervlak, huidige_kleur, (int(self.x), int(self.y)), int(self.grootte))
 
+class ParticleSystem:
+    def __init__(self):
+        self.deeltjes = []
 
-def get_level_for_visible_score(visible_score: int):
-    idx = 0
-    for i, cfg in enumerate(LEVELS):
-        if visible_score >= cfg["min_score"]:
-            idx = i
-    return idx, LEVELS[idx]
+    def explosie(self, x, y, kleur, aantal=20):
+        for _ in range(aantal):
+            snelheid = random.uniform(2, 6)
+            hoek = random.uniform(0, 360)
+            levensduur = random.randint(30, 60)
+            self.deeltjes.append(Deeltje(x, y, kleur, snelheid, hoek, levensduur, 0.1))
 
+    def spoor(self, x, y, kleur):
+        self.deeltjes.append(Deeltje(x, y, kleur, random.uniform(0.5, 2), random.uniform(80, 100), 20, 0.05))
 
-def spawn_block(level_cfg):
-    size_min, size_max = level_cfg.get("size_range", BLOCK_SIZE_RANGE_DEFAULT)
-    size = random.randint(size_min, size_max)
-    x = random.randint(0, SCREEN_WIDTH - size)
-    y = random.randint(-SCREEN_HEIGHT, 0)
-
-    vx_min, vx_max = level_cfg.get("vx_range", (0.0, 0.0))
-    vx = random.uniform(vx_min, vx_max)
-    # avoid tiny drift that looks like jitter
-    if abs(vx) < 0.20:
-        vx = 0.0
-
-    fast_chance = float(level_cfg.get("fast_chance", 0.0))
-    fast_mul = float(level_cfg.get("fast_mul", 1.0))
-    speed_mul = fast_mul if random.random() < fast_chance else 1.0
-
-    # block = [x, y, size, vx, speed_mul]
-    return [float(x), float(y), int(size), float(vx), float(speed_mul)]
-
-
-def apply_level_to_existing_blocks(blocks, level_cfg):
-    """When level changes, refresh vx + fast/slow assignment so the new mechanics are visible immediately."""
-    for b in blocks:
-        vx_min, vx_max = level_cfg.get("vx_range", (0.0, 0.0))
-        vx = random.uniform(vx_min, vx_max)
-        if abs(vx) < 0.20:
-            vx = 0.0
-        b[3] = float(vx)
-
-        fast_chance = float(level_cfg.get("fast_chance", 0.0))
-        fast_mul = float(level_cfg.get("fast_mul", 1.0))
-        b[4] = float(fast_mul if random.random() < fast_chance else 1.0)
-
-
-def update_blocks(blocks, fall_speed, level_cfg, visible_score):
-    # movement + respawn
-    for b in blocks:
-        b[1] += fall_speed * b[4]
-        b[0] += b[3]
-
-        # bounce from sides if drifting
-        if b[0] < 0:
-            b[0] = 0.0
-            b[3] = abs(b[3])
-        elif b[0] > SCREEN_WIDTH - b[2]:
-            b[0] = float(SCREEN_WIDTH - b[2])
-            b[3] = -abs(b[3])
-
-        if b[1] > SCREEN_HEIGHT:
-            nb = spawn_block(level_cfg)
-            # keep some spacing
-            nb[1] = float(random.randint(-180, -30))
-            b[:] = nb
-
-    # target amount of blocks grows within the level
-    progress = max(0, visible_score - int(level_cfg["min_score"]))
-    extra_every = int(level_cfg.get("extra_every", 999999))
-    base_blocks = int(level_cfg.get("base_blocks", 10))
-    max_blocks = int(level_cfg.get("max_blocks", base_blocks))
-
-    target = base_blocks
-    if extra_every > 0:
-        target += progress // extra_every
-    target = min(target, max_blocks)
-
-    while len(blocks) < target:
-        nb = spawn_block(level_cfg)
-        nb[1] = float(random.randint(-220, -40))
-        blocks.append(nb)
-
-    # (optional) trim if ever needed
-    if len(blocks) > max_blocks:
-        del blocks[max_blocks:]
-
-
-def spawn_heal_pickup():
-    # pickup = [x, y, size]
-    size = 26
-    x = random.randint(0, SCREEN_WIDTH - size)
-    y = random.randint(-260, -60)
-    return [float(x), float(y), int(size)]
-
-
-def update_heal_pickups(heals, fall_speed):
-    for h in heals:
-        h[1] += fall_speed * 0.85 + 1.3
-    heals[:] = [h for h in heals if h[1] <= SCREEN_HEIGHT + 40]
-
-
-# --- UI CLASS ---
-class UIElement(Sprite):
-    def __init__(self, center_position, text, font_size, text_rgb, action=None):
-        super().__init__()
-        self.mouse_over = False
-        self.action = action
-        self.font_size = font_size
-        self.text_rgb = text_rgb
-
-        default_image = create_surface_with_text(text, font_size, text_rgb)
-        highlighted_image = create_surface_with_text(text, int(font_size * 1.2), text_rgb)
-
-        self.images = [default_image, highlighted_image]
-        self.rects = [
-            default_image.get_rect(center=center_position),
-            highlighted_image.get_rect(center=center_position),
-        ]
-
-    def set_text(self, text, font_size, text_rgb):
-        default_image = create_surface_with_text(text, font_size, text_rgb)
-        highlighted_image = create_surface_with_text(text, int(font_size * 1.2), text_rgb)
-        self.images = [default_image, highlighted_image]
-        current_center = self.rects[0].center
-        self.rects = [
-            default_image.get_rect(center=current_center),
-            highlighted_image.get_rect(center=current_center),
-        ]
-
-    @property
-    def image(self):
-        return self.images[1] if self.mouse_over else self.images[0]
-
-    @property
-    def rect(self):
-        return self.rects[1] if self.mouse_over else self.rects[0]
-
-    def update(self, mouse_pos, mouse_up):
-        if self.rect.collidepoint(mouse_pos):
-            self.mouse_over = True
-            if mouse_up:
-                return self.action
-        else:
-            self.mouse_over = False
-        return None
-
-    def draw(self, surface):
-        surface.blit(self.image, self.rect)
-
-
-# --- ALGEMENE FUNCTIES ---
-def wait_for_key():
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return None
-            if event.type == pygame.KEYDOWN:
-                return event.key
-
-
-def game_loop(screen, buttons):
-    clock = pygame.time.Clock()
-    while True:
-        clock.tick(FPS)
-
-        # Wanneer een one-shot track afloopt (bv. gameover), terug naar menu-muziek
-        if MIXER_AVAILABLE and AUDIO.music_enabled and not pygame.mixer.music.get_busy():
-            AUDIO.play_music(MENU_MUSIC_FILE, 0.5, loop=-1)
-
-        mouse_up = False
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return GameState.QUIT
-            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                mouse_up = True
-
-        if MENU_BACKGROUND:
-            screen.blit(MENU_BACKGROUND, (0, 0))
-        else:
-            screen.fill(BLUE)
-
-        for button in buttons:
-            ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
-            if ui_action is not None:
-                return ui_action
-            button.draw(screen)
-
-        pygame.display.flip()
-
-
-# --- GAMEPLAY FUNCTIES ---
-def render_frame(
-    surface,
-    blocks,
-    heals,
-    player_x,
-    player_y,
-    current_score,
-    heart_img,
-    pickup_img,
-    current_lives,
-    max_lives,
-    immunity_timer,
-    background_img,
-    img_small,
-    img_medium,
-    img_large,
-    player_image,
-    level_idx,
-    level_banner_timer,
-):
-    surface.fill(BLACK)
-    if background_img:
-        surface.blit(background_img, (0, 0))
-
-    # Blocks / Meteors
-    for b in blocks:
-        x_pos, y_pos, size = int(b[0]), int(b[1]), int(b[2])
-        chosen_img = None
-        if img_small and img_medium and img_large:
-            if size < 40:
-                chosen_img = img_small
-            elif size < 50:
-                chosen_img = img_medium
+    def update_en_teken(self, oppervlak):
+        for p in self.deeltjes[:]:
+            p.update()
+            if p.levensduur <= 0:
+                self.deeltjes.remove(p)
             else:
-                chosen_img = img_large
-            scaled_meteor = pygame.transform.scale(chosen_img, (size, size))
-            surface.blit(scaled_meteor, (x_pos, y_pos))
-        else:
-            pygame.draw.rect(surface, WHITE, (x_pos, y_pos, size, size))
+                p.teken(oppervlak)
 
-    # Heal pickups
-    for h in heals:
-        hx, hy, hs = int(h[0]), int(h[1]), int(h[2])
-        if pickup_img:
-            surface.blit(pickup_img, (hx, hy))
-        else:
-            pygame.draw.rect(surface, GREEN, (hx, hy, hs, hs), border_radius=6)
+# ==============================================================================
+# 5. SPEL OBJECTEN (ENTITIES)
+# ==============================================================================
 
-    # Player (blink if immune)
-    if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
-        if player_image:
-            img_rect = player_image.get_rect(center=(int(player_x), int(player_y)))
-            surface.blit(player_image, img_rect)
-        else:
-            pygame.draw.circle(surface, GAME_BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
+class Speler:
+    def __init__(self):
+        self.breedte = 30
+        self.hoogte = 30
+        self.pos = Vector2(SCHERM_BREEDTE // 2, SCHERM_HOOGTE - 100)
+        self.snelheid = 6
+        self.kleur = C_SPELER
+        self.rect = pygame.Rect(self.pos.x, self.pos.y, self.breedte, self.hoogte)
+        self.levens = 3
+        self.schild_actief = False
+        self.schild_tijd = 0
+        self.score = 0
 
-    # HUD: score + level
-    score_display = "Score: " + str(current_score // 10)
-    score_surface = FONT_SCORE.render(score_display, True, WHITE)
-    surface.blit(score_surface, (SCREEN_WIDTH - 220, 16))
+    def beweeg(self, toetsen):
+        dx, dy = 0, 0
+        if toetsen[pygame.K_LEFT] or toetsen[pygame.K_a]: dx = -self.snelheid
+        if toetsen[pygame.K_RIGHT] or toetsen[pygame.K_d]: dx = self.snelheid
+        if toetsen[pygame.K_UP] or toetsen[pygame.K_w]: dy = -self.snelheid
+        if toetsen[pygame.K_DOWN] or toetsen[pygame.K_s]: dy = self.snelheid
 
-    level_surface = FONT_SMALL.render(f"Level: {level_idx + 1}", True, WHITE)
-    surface.blit(level_surface, (SCREEN_WIDTH - 220, 50))
+        # Speed boost check
+        if self.snelheid > 6:
+            self.snelheid -= 0.05 # Langzaam terug naar normaal
 
-    # HUD: lives
-    if heart_img:
-        for i in range(current_lives):
-            surface.blit(heart_img, (20 + (i * 35), 20))
-        # optional: show max capacity as outlines (simple text)
-        if current_lives < max_lives:
-            txt = FONT_SMALL.render(f"/ {max_lives}", True, WHITE)
-            surface.blit(txt, (20 + (max_lives * 35), 24))
-    else:
-        lives_surface = FONT_SCORE.render(f"Lives: {current_lives}/{max_lives}", True, RED)
-        surface.blit(lives_surface, (20, 20))
+        self.pos.x = max(0, min(SCHERM_BREEDTE - self.breedte, self.pos.x + dx))
+        self.pos.y = max(0, min(SCHERM_HOOGTE - self.hoogte, self.pos.y + dy))
+        self.rect.topleft = (self.pos.x, self.pos.y)
 
-    # Level banner
-    if level_banner_timer > 0:
-        name = LEVELS[level_idx]["name"]
-        banner = FONT_LEVEL.render(name, True, YELLOW)
-        rect = banner.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 10))
-        surface.blit(banner, rect)
+        # Schild timer
+        if self.schild_actief:
+            self.schild_tijd -= 1
+            if self.schild_tijd <= 0:
+                self.schild_actief = False
 
-    pygame.display.flip()
+    def teken(self, oppervlak):
+        if self.schild_actief:
+            pygame.draw.circle(oppervlak, C_POWERUP_SCHILD, self.rect.center, 25, 2)
+        pygame.draw.rect(oppervlak, self.kleur, self.rect)
+        # Oogjes
+        pygame.draw.rect(oppervlak, C_ZWART, (self.pos.x + 5, self.pos.y + 5, 5, 5))
+        pygame.draw.rect(oppervlak, C_ZWART, (self.pos.x + 20, self.pos.y + 5, 5, 5))
 
+class VijandBasis:
+    """Parent klasse voor alle vijanden"""
+    def __init__(self):
+        self.grootte = random.randint(20, 40)
+        self.pos = Vector2(random.randint(0, SCHERM_BREEDTE - self.grootte), -50)
+        self.rect = pygame.Rect(self.pos.x, self.pos.y, self.grootte, self.grootte)
+        self.kleur = C_VIJAND_BASIS
+        self.verwijder_mij = False
+    
+    def update(self, speler_pos):
+        self.rect.topleft = (self.pos.x, self.pos.y)
+        if self.pos.y > SCHERM_HOOGTE:
+            self.verwijder_mij = True
 
-def play_level(screen):
-    global LAST_SCORE
+    def teken(self, oppervlak):
+        pygame.draw.rect(oppervlak, self.kleur, self.rect)
 
-    AUDIO.play_music(GAMEPLAY_MUSIC_FILE, 0.4, loop=-1)
+class VijandRecht(VijandBasis):
+    """Valt gewoon naar beneden"""
+    def update(self, speler_pos):
+        self.pos.y += 5
+        super().update(speler_pos)
 
-    # Try to load images; fallback to shapes if missing
-    try:
-        player_image = pygame.image.load("images/spaceshipp.png").convert_alpha()
-        player_image = pygame.transform.scale(player_image, (PLAYER_RADIUS * 2, PLAYER_RADIUS * 2))
-        background_image = pygame.image.load("images/galaxy.png").convert()
-        background_image = pygame.transform.scale(background_image, SCREEN_SIZE)
-        meteor_small = pygame.image.load("images/neptunus.png").convert_alpha()
-        meteor_medium = pygame.image.load("images/mars.png").convert_alpha()
-        meteor_large = pygame.image.load("images/jupiter.png").convert_alpha()
-        heart_image = pygame.image.load("images/lives.png").convert_alpha()
-        heart_image = pygame.transform.scale(heart_image, (30, 30))
-        pickup_image = pygame.transform.scale(heart_image, (24, 24))
-    except Exception:
-        background_image = meteor_small = meteor_medium = meteor_large = heart_image = player_image = pickup_image = None
+class VijandVolger(VijandBasis):
+    """Beweegt langzaam richting de speler"""
+    def __init__(self):
+        super().__init__()
+        self.kleur = C_VIJAND_VOLG
+        self.snelheid = 3
 
-    # Player
-    x, y = SCREEN_WIDTH // 2, SCREEN_HEIGHT - 100
-    x_velocity = y_velocity = 0
+    def update(self, speler_pos):
+        richting = Vector2(speler_pos.x - self.pos.x, speler_pos.y - self.pos.y).normaliseer()
+        self.pos.x += richting.x * self.snelheid
+        self.pos.y += 3 # Valt altijd naar beneden
+        super().update(speler_pos)
 
-    # Level init
-    score = 0
-    visible_score = 0
-    level_idx, level_cfg = get_level_for_visible_score(visible_score)
-    level_banner_timer = int(1.2 * FPS)
+class VijandSine(VijandBasis):
+    """Beweegt in een sinusgolf"""
+    def __init__(self):
+        super().__init__()
+        self.kleur = C_VIJAND_SINE
+        self.start_x = self.pos.x
+        self.hoek = 0
 
-    # Blocks
-    blocks = [spawn_block(level_cfg) for _ in range(int(level_cfg["base_blocks"]))]
+    def update(self, speler_pos):
+        self.pos.y += 4
+        self.hoek += 0.1
+        self.pos.x = self.start_x + math.sin(self.hoek) * 100
+        super().update(speler_pos)
 
-    # Difficulty
-    fall_speed = float(level_cfg["start_speed"])
+class PowerUp:
+    def __init__(self):
+        self.type = random.choice(["SCHILD", "NUKE", "SPEED"])
+        self.pos = Vector2(random.randint(50, SCHERM_BREEDTE - 50), -30)
+        self.rect = pygame.Rect(self.pos.x, self.pos.y, 20, 20)
+        self.verwijder_mij = False
+    
+    def update(self):
+        self.pos.y += 3
+        self.rect.topleft = (self.pos.x, self.pos.y)
+        if self.pos.y > SCHERM_HOOGTE:
+            self.verwijder_mij = True
 
-    # Lives / hit / immunity
-    lives = START_LIVES
-    immunity_timer = 0
+    def teken(self, oppervlak):
+        kleur = C_WIT
+        if self.type == "SCHILD": kleur = C_POWERUP_SCHILD
+        elif self.type == "NUKE": kleur = C_POWERUP_NUKE
+        elif self.type == "SPEED": kleur = C_SPELER
+        
+        pygame.draw.circle(oppervlak, kleur, self.rect.center, 10)
+        label = FONT_KLEIN.render(self.type[0], True, C_ZWART)
+        oppervlak.blit(label, (self.rect.centerx - 4, self.rect.centery - 8))
 
-    # Heal pickups
-    heals = []
-    heal_timer = random.randint(*level_cfg["heal_timer_range"])
+# ==============================================================================
+# 6. GAME STATES (STATE MACHINE)
+# ==============================================================================
 
-    clock = pygame.time.Clock()
+class GameState(Enum):
+    MENU = 1
+    SPELEN = 2
+    PAUZE = 3
+    GAMEOVER = 4
 
-    while True:
-        clock.tick(FPS)
-        if immunity_timer > 0:
-            immunity_timer -= 1
-        if level_banner_timer > 0:
-            level_banner_timer -= 1
+class GameEngine:
+    def __init__(self):
+        self.state = GameState.MENU
+        self.data = DataManager.laad_data()
+        self.particles = ParticleSystem()
+        self.reset_game()
+        self.maak_ui()
 
+    def maak_ui(self):
+        cx = SCHERM_BREEDTE // 2
+        cy = SCHERM_HOOGTE // 2
+        
+        # Menu Knoppen
+        self.btn_start = Knop("START SPEL", cx - 100, cy - 20, 200, 50, self.start_spel)
+        self.btn_quit = Knop("AFSLUITEN", cx - 100, cy + 50, 200, 50, self.stop_spel)
+        
+        # Game Over Knoppen
+        self.btn_restart = Knop("OPNIEUW", cx - 100, cy + 50, 200, 50, self.start_spel)
+        self.btn_menu = Knop("HOOFDMENU", cx - 100, cy + 120, 200, 50, self.naar_menu)
+
+    def reset_game(self):
+        self.speler = Speler()
+        self.vijanden = []
+        self.powerups = []
+        self.spawn_timer = 0
+        self.powerup_timer = 0
+        self.moeilijkheid = 1.0
+
+    # --- State Transities ---
+    def start_spel(self):
+        self.reset_game()
+        self.state = GameState.SPELEN
+
+    def stop_spel(self):
+        pygame.quit()
+        sys.exit()
+
+    def naar_menu(self):
+        self.state = GameState.MENU
+
+    # --- Logica per frame ---
+    def verwerk_input(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                return GameState.QUIT
+                self.stop_spel()
+            
+            muis_pos = pygame.mouse.get_pos()
+
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if self.state == GameState.MENU:
+                    self.btn_start.verwerk_klik(muis_pos)
+                    self.btn_quit.verwerk_klik(muis_pos)
+                elif self.state == GameState.GAMEOVER:
+                    self.btn_restart.verwerk_klik(muis_pos)
+                    self.btn_menu.verwerk_klik(muis_pos)
 
             if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    return GameState.TITLE
-                if event.key == KEY_RIGHT:
-                    x_velocity = MOVEMENT_SPEED
-                if event.key == KEY_LEFT:
-                    x_velocity = -MOVEMENT_SPEED
-                if event.key == KEY_UP:
-                    y_velocity = -MOVEMENT_SPEED
-                if event.key == KEY_DOWN:
-                    y_velocity = MOVEMENT_SPEED
+                if event.key == pygame.K_p and self.state == GameState.SPELEN:
+                    self.state = GameState.PAUZE
+                elif event.key == pygame.K_p and self.state == GameState.PAUZE:
+                    self.state = GameState.SPELEN
+                elif event.key == pygame.K_ESCAPE and self.state == GameState.SPELEN:
+                    self.state = GameState.MENU
 
-            if event.type == pygame.KEYUP:
-                if event.key == KEY_RIGHT and x_velocity > 0:
-                    x_velocity = 0
-                if event.key == KEY_LEFT and x_velocity < 0:
-                    x_velocity = 0
-                if event.key == KEY_UP and y_velocity < 0:
-                    y_velocity = 0
-                if event.key == KEY_DOWN and y_velocity > 0:
-                    y_velocity = 0
+    def update(self):
+        muis_pos = pygame.mouse.get_pos()
 
-        # Update movement
-        x += x_velocity
-        y += y_velocity
+        if self.state == GameState.MENU:
+            self.btn_start.update(muis_pos)
+            self.btn_quit.update(muis_pos)
+            self.particles.update_en_teken(SCHERM) # Menu particles
 
-        # Score / level
-        score += 1
-        visible_score = score // 10
-        new_level_idx, new_level_cfg = get_level_for_visible_score(visible_score)
-        if new_level_idx != level_idx:
-            level_idx, level_cfg = new_level_idx, new_level_cfg
-            level_banner_timer = int(1.2 * FPS)
+        elif self.state == GameState.SPELEN:
+            toetsen = pygame.key.get_pressed()
+            self.speler.beweeg(toetsen)
+            
+            # Speler trail
+            if random.random() < 0.3:
+                self.particles.spoor(self.speler.pos.x + 15, self.speler.pos.y + 30, (0, 200, 200))
 
-            # Make sure level mechanics apply immediately
-            apply_level_to_existing_blocks(blocks, level_cfg)
+            # Spawnen
+            self.spawn_mechaniek()
 
-            # Don’t drop speed when leveling up
-            fall_speed = max(fall_speed, float(level_cfg["start_speed"]))
+            # Updates entiteiten
+            self.update_vijanden()
+            self.update_powerups()
+            
+            # Score check
+            self.speler.score += 1
+            if self.speler.score % 500 == 0:
+                self.moeilijkheid += 0.2
 
-            # Reset heal timer for new level pacing
-            heal_timer = min(heal_timer, random.randint(*level_cfg["heal_timer_range"]))
+            if self.speler.levens <= 0:
+                self.game_over_logic()
 
-        # Difficulty curve within level
-        fall_speed = max(fall_speed, float(level_cfg["start_speed"]))
-        fall_speed = min(fall_speed + float(level_cfg["speed_increase"]), float(level_cfg["max_speed"]))
+        elif self.state == GameState.GAMEOVER:
+            self.btn_restart.update(muis_pos)
+            self.btn_menu.update(muis_pos)
 
-        # Update blocks + pickups
-        update_blocks(blocks, fall_speed, level_cfg, visible_score)
+    def spawn_mechaniek(self):
+        # Vijanden
+        self.spawn_timer += 1
+        drempel = max(20, 60 - int(self.moeilijkheid * 2))
+        if self.spawn_timer > drempel:
+            keuze = random.random()
+            if keuze < 0.6: self.vijanden.append(VijandRecht())
+            elif keuze < 0.8: self.vijanden.append(VijandVolger())
+            else: self.vijanden.append(VijandSine())
+            self.spawn_timer = 0
+        
+        # Powerups
+        self.powerup_timer += 1
+        if self.powerup_timer > 600: # Elke ~10 sec
+            self.powerups.append(PowerUp())
+            self.powerup_timer = 0
 
-        # Heal spawn logic (only if you are not already at max lives)
-        if lives < MAX_LIVES:
-            heal_timer -= 1
-            if heal_timer <= 0 and len(heals) < 2:
-                heals.append(spawn_heal_pickup())
-                heal_timer = random.randint(*level_cfg["heal_timer_range"])
-        else:
-            # postpone while full
-            heal_timer = min(heal_timer, 2 * FPS)
-
-        update_heal_pickups(heals, fall_speed)
-
-        # Clamp player
-        x = max(PLAYER_RADIUS, min(x, SCREEN_WIDTH - PLAYER_RADIUS))
-        y = max(PLAYER_RADIUS, min(y, SCREEN_HEIGHT - PLAYER_RADIUS))
-
-        player_rect = pygame.Rect(int(x - PLAYER_RADIUS), int(y - PLAYER_RADIUS), PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
-
-        # Collisions with blocks
-        if immunity_timer == 0:
-            for b in blocks:
-                block_rect = pygame.Rect(int(b[0]), int(b[1]), int(b[2]), int(b[2]))
-                if player_rect.colliderect(block_rect):
-                    lives -= 1
-                    AUDIO.play_sfx("hit")
-                    render_frame(
-                        screen,
-                        blocks,
-                        heals,
-                        x,
-                        y,
-                        score,
-                        heart_image,
-                        pickup_image,
-                        lives,
-                        MAX_LIVES,
-                        1,
-                        background_image,
-                        meteor_small,
-                        meteor_medium,
-                        meteor_large,
-                        player_image,
-                        level_idx,
-                        level_banner_timer,
-                    )
-                    pygame.time.delay(300)
-                    immunity_timer = IMMUNITY_FRAMES
-
-                    if lives <= 0:
-                        LAST_SCORE = score // 10
-                        return GameState.GAMEOVER
-                    break
-
-        # Collisions with heals
-        if heals:
-            for h in heals[:]:
-                heal_rect = pygame.Rect(int(h[0]), int(h[1]), int(h[2]), int(h[2]))
-                if player_rect.colliderect(heal_rect):
-                    heals.remove(h)
-                    if lives < MAX_LIVES:
-                        lives += 1
-                        AUDIO.play_sfx("heal")
-                    break
-
-        render_frame(
-            screen,
-            blocks,
-            heals,
-            x,
-            y,
-            score,
-            heart_image,
-            pickup_image,
-            lives,
-            MAX_LIVES,
-            immunity_timer,
-            background_image,
-            meteor_small,
-            meteor_medium,
-            meteor_large,
-            player_image,
-            level_idx,
-            level_banner_timer,
-        )
-
-
-# --- MENU SCHERMEN ---
-def title_screen(screen):
-    start_btn = UIElement((CENTER_X, 250), "Start Game", 50, WHITE, GameState.PLAYING)
-    options_btn = UIElement((CENTER_X, 400), "Options", 50, WHITE, GameState.OPTIONS)
-    quit_btn = UIElement((CENTER_X, 550), "Afsluiten", 50, WHITE, GameState.QUIT)
-    return game_loop(screen, RenderUpdates(start_btn, options_btn, quit_btn))
-
-
-def options_screen(screen):
-    TITLE = UIElement((CENTER_X, 150), "SETTINGS", 70, WHITE)
-    sound_btn = UIElement((CENTER_X, 300), "Sound", 40, WHITE, GameState.SOUND)
-    controls_btn = UIElement((CENTER_X, 450), "CONTROLS", 40, WHITE, GameState.CONTROLS)
-    back_btn = UIElement((CENTER_X, 600), "Back", 40, WHITE, GameState.TITLE)
-    return game_loop(screen, RenderUpdates(TITLE, back_btn, controls_btn, sound_btn))
-
-
-def control_screen(screen):
-    global KEY_LEFT, KEY_RIGHT, KEY_UP, KEY_DOWN
-
-    TITLE = UIElement((CENTER_X, 100), "CLICK TO CHANGE KEYS", 50, WHITE)
-    btn_left = UIElement((CENTER_X, 200), f"move left: {pygame.key.name(KEY_LEFT).upper()}", 25, WHITE, "CHANGE_LEFT")
-    btn_right = UIElement((CENTER_X, 300), f"move right: {pygame.key.name(KEY_RIGHT).upper()}", 25, WHITE, "CHANGE_RIGHT")
-    btn_down = UIElement((CENTER_X, 400), f"move down: {pygame.key.name(KEY_DOWN).upper()}", 25, WHITE, "CHANGE_DOWN")
-    btn_up = UIElement((CENTER_X, 500), f"move up: {pygame.key.name(KEY_UP).upper()}", 25, WHITE, "CHANGE_UP")
-    back_btn = UIElement((CENTER_X, 600), "Back to Options", 30, WHITE, GameState.OPTIONS)
-
-    buttons = RenderUpdates(TITLE, btn_left, btn_right, btn_down, btn_up, back_btn)
-    clock = pygame.time.Clock()
-
-    while True:
-        clock.tick(FPS)
-        mouse_up = False
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return GameState.QUIT
-            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                mouse_up = True
-
-        if MENU_BACKGROUND:
-            screen.blit(MENU_BACKGROUND, (0, 0))
-        else:
-            screen.fill(BLUE)
-
-        for button in buttons:
-            ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
-            if ui_action is not None:
-                if isinstance(ui_action, GameState):
-                    return ui_action
-
-                button.set_text("PRESS KEY...", 25, YELLOW)
-                button.draw(screen)
-                pygame.display.flip()
-                new = wait_for_key()
-                if new is None:
-                    return GameState.QUIT
-
-                if not key_is_taken(new):
-                    if ui_action == "CHANGE_LEFT":
-                        KEY_LEFT = new
-                    elif ui_action == "CHANGE_RIGHT":
-                        KEY_RIGHT = new
-                    elif ui_action == "CHANGE_DOWN":
-                        KEY_DOWN = new
-                    elif ui_action == "CHANGE_UP":
-                        KEY_UP = new
+    def update_vijanden(self):
+        speler_rect = self.speler.rect
+        speler_pos = Vector2(self.speler.rect.x, self.speler.rect.y)
+        
+        for v in self.vijanden[:]:
+            v.update(speler_pos)
+            
+            # Botsing
+            if v.rect.colliderect(speler_rect):
+                self.particles.explosie(v.pos.x, v.pos.y, v.kleur)
+                self.vijanden.remove(v)
+                
+                if self.speler.schild_actief:
+                    self.speler.schild_actief = False # Schild breekt
+                    self.particles.explosie(self.speler.pos.x, self.speler.pos.y, C_POWERUP_SCHILD, 30)
                 else:
-                    show_taken_error(button, screen)
+                    self.speler.levens -= 1
+                    self.particles.explosie(self.speler.pos.x, self.speler.pos.y, C_SPELER)
+            
+            elif v.verwijder_mij:
+                self.vijanden.remove(v)
 
-                # Update texts
-                btn_left.set_text(f"move left: {pygame.key.name(KEY_LEFT).upper()}", 25, WHITE)
-                btn_right.set_text(f"move right: {pygame.key.name(KEY_RIGHT).upper()}", 25, WHITE)
-                btn_down.set_text(f"move down: {pygame.key.name(KEY_DOWN).upper()}", 25, WHITE)
-                btn_up.set_text(f"move up: {pygame.key.name(KEY_UP).upper()}", 25, WHITE)
+    def update_powerups(self):
+        for p in self.powerups[:]:
+            p.update()
+            if p.rect.colliderect(self.speler.rect):
+                if p.type == "SCHILD": 
+                    self.speler.schild_actief = True
+                    self.speler.schild_tijd = 600
+                elif p.type == "SPEED": 
+                    self.speler.snelheid = 12
+                elif p.type == "NUKE":
+                    for v in self.vijanden:
+                        self.particles.explosie(v.pos.x, v.pos.y, v.kleur)
+                    self.vijanden.clear()
+                    self.speler.score += 500
+                
+                self.powerups.remove(p)
+            elif p.verwijder_mij:
+                self.powerups.remove(p)
 
-            button.draw(screen)
+    def game_over_logic(self):
+        self.state = GameState.GAMEOVER
+        if self.speler.score > self.data['highscore']:
+            self.data['highscore'] = self.speler.score
+            DataManager.sla_op(self.data)
+
+    # --- Render ---
+    def teken(self):
+        SCHERM.fill(C_ACHTERGROND)
+        
+        # Achtergrond grid (Retro effect)
+        for x in range(0, SCHERM_BREEDTE, 50):
+            pygame.draw.line(SCHERM, (20, 25, 30), (x, 0), (x, SCHERM_HOOGTE))
+        for y in range(0, SCHERM_HOOGTE, 50):
+            pygame.draw.line(SCHERM, (20, 25, 30), (0, y), (SCHERM_BREEDTE, y))
+
+        if self.state == GameState.MENU:
+            # Titel animatie
+            offset = math.sin(pygame.time.get_ticks() / 500) * 10
+            titel = FONT_GROOT.render("NEON VOID", True, C_SPELER)
+            subtitel = FONT_NORMAAL.render(f"Highscore: {self.data['highscore']}", True, C_WIT)
+            
+            SCHERM.blit(titel, (SCHERM_BREEDTE//2 - titel.get_width()//2, 150 + offset))
+            SCHERM.blit(subtitel, (SCHERM_BREEDTE//2 - subtitel.get_width()//2, 230))
+            
+            self.btn_start.teken(SCHERM)
+            self.btn_quit.teken(SCHERM)
+
+        elif self.state == GameState.SPELEN:
+            for p in self.powerups: p.teken(SCHERM)
+            for v in self.vijanden: v.teken(SCHERM)
+            self.speler.teken(SCHERM)
+            self.particles.update_en_teken(SCHERM)
+            
+            # HUD
+            score_txt = FONT_NORMAAL.render(f"Score: {self.speler.score}", True, C_WIT)
+            levens_txt = FONT_NORMAAL.render(f"Levens: {self.speler.levens}", True, C_VIJAND_BASIS)
+            SCHERM.blit(score_txt, (10, 10))
+            SCHERM.blit(levens_txt, (10, 40))
+
+        elif self.state == GameState.PAUZE:
+            pauze_txt = FONT_GROOT.render("PAUZE", True, C_WIT)
+            SCHERM.blit(pauze_txt, (SCHERM_BREEDTE//2 - pauze_txt.get_width()//2, SCHERM_HOOGTE//2 - 50))
+
+        elif self.state == GameState.GAMEOVER:
+            # We blijven de game tekenen op de achtergrond, maar donkerder
+            overlay = pygame.Surface((SCHERM_BREEDTE, SCHERM_HOOGTE))
+            overlay.set_alpha(180)
+            overlay.fill((0,0,0))
+            SCHERM.blit(overlay, (0,0))
+            
+            txt = FONT_GROOT.render("GAME OVER", True, C_VIJAND_BASIS)
+            score = FONT_NORMAAL.render(f"Eindscore: {self.speler.score}", True, C_WIT)
+            SCHERM.blit(txt, (SCHERM_BREEDTE//2 - txt.get_width()//2, 150))
+            SCHERM.blit(score, (SCHERM_BREEDTE//2 - score.get_width()//2, 220))
+            
+            self.btn_restart.teken(SCHERM)
+            self.btn_menu.teken(SCHERM)
 
         pygame.display.flip()
 
-
-def show_taken_error(button, screen):
-    font = pygame.freetype.SysFont("Arial", 25, bold=True)
-    text_surf, text_rect = font.render("KEY ALREADY TAKEN!", fgcolor=RED, bgcolor=None)
-
-    x = button.rect.right + 20
-    y = button.rect.centery - (text_rect.height / 2)
-    screen.blit(text_surf, (x, y))
-    pygame.display.flip()
-    pygame.time.delay(1000)
-
-
-def sound_screen(screen):
-    def get_music_text():
-        return "Music: ON" if AUDIO.music_enabled else "Music: OFF"
-
-    def get_sfx_text():
-        return "Effects: ON" if AUDIO.sfx_enabled else "Effects: OFF"
-
-    # Ensure desired track is menu music while in menu screens
-    AUDIO.play_music(MENU_MUSIC_FILE, 0.5, loop=-1)
-
-    TITLE = UIElement((CENTER_X, 100), "SOUNDS", 50, WHITE)
-    music_btn = UIElement((CENTER_X, 300), get_music_text(), 30, WHITE, "TOGGLE_MUSIC")
-    effects_btn = UIElement((CENTER_X, 400), get_sfx_text(), 30, WHITE, "TOGGLE_SFX")
-    back_btn = UIElement((CENTER_X, 600), "Back to Options", 30, WHITE, GameState.OPTIONS)
-
-    buttons = RenderUpdates(TITLE, music_btn, effects_btn, back_btn)
-    clock = pygame.time.Clock()
-
-    while True:
-        clock.tick(FPS)
-        mouse_up = False
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return GameState.QUIT
-            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                mouse_up = True
-
-        if MENU_BACKGROUND:
-            screen.blit(MENU_BACKGROUND, (0, 0))
-        else:
-            screen.fill(BLUE)
-
-        for button in buttons:
-            ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
-
-            if ui_action == "TOGGLE_MUSIC":
-                AUDIO.music_enabled = not AUDIO.music_enabled
-                AUDIO.apply_music_state()
-                music_btn.set_text(get_music_text(), 30, WHITE)
-
-            elif ui_action == "TOGGLE_SFX":
-                AUDIO.sfx_enabled = not AUDIO.sfx_enabled
-                effects_btn.set_text(get_sfx_text(), 30, WHITE)
-
-            elif isinstance(ui_action, GameState):
-                return ui_action
-
-            button.draw(screen)
-
-        pygame.display.flip()
-
-
-def game_over_screen(screen):
-    tekst_btn = UIElement((CENTER_X, 150), "GAME OVER", 60, RED)
-    score_display = UIElement((CENTER_X, 250), f"Jouw Score: {LAST_SCORE}", 40, YELLOW)
-    restart_btn = UIElement((CENTER_X, 400), "Opnieuw spelen", 30, WHITE, GameState.PLAYING)
-    menu_btn = UIElement((CENTER_X, 500), "Hoofdmenu", 30, WHITE, GameState.TITLE)
-    return game_loop(screen, RenderUpdates(tekst_btn, score_display, restart_btn, menu_btn))
-
-
-def main():
-    global MENU_BACKGROUND
-    screen = pygame.display.set_mode(SCREEN_SIZE)
-    pygame.display.set_caption("Dodge Blocks - Full Game")
-
-    try:
-        MENU_BACKGROUND = pygame.image.load("images/background.png").convert()
-        MENU_BACKGROUND = pygame.transform.scale(MENU_BACKGROUND, SCREEN_SIZE)
-    except Exception:
-        MENU_BACKGROUND = None
-
-    game_state = GameState.TITLE
-
-    while True:
-        if game_state == GameState.TITLE:
-            AUDIO.play_music(MENU_MUSIC_FILE, 0.5, loop=-1)
-            game_state = title_screen(screen)
-
-        elif game_state == GameState.PLAYING:
-            game_state = play_level(screen)
-
-        elif game_state == GameState.GAMEOVER:
-            # Speel de clip 1 keer af, daarna schakelt menu-loop terug naar menu-muziek
-            AUDIO.play_music(GAMEOVER_MUSIC_FILE, 0.5, loop=0)
-            game_state = game_over_screen(screen)
-
-        elif game_state == GameState.OPTIONS:
-            game_state = options_screen(screen)
-
-        elif game_state == GameState.CONTROLS:
-            game_state = control_screen(screen)
-
-        elif game_state == GameState.SOUND:
-            game_state = sound_screen(screen)
-
-        elif game_state == GameState.QUIT:
-            pygame.quit()
-            sys.exit()
-
+# ==============================================================================
+# 7. MAIN LOOP
+# ==============================================================================
 
 if __name__ == "__main__":
-    main()
+    game = GameEngine()
+    
+    while True:
+        KLOK.tick(FPS)
+        game.verwerk_input()
+        game.update()
+        game.teken()

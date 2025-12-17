@@ -408,14 +408,23 @@ def show_taken_error(button, screen):
     pygame.time.delay(1000)
 
 def sound_screen(screen):
-    def get_music_text():
-        return "Music: ON" if audio.music_enabled else "Music: OFF"
-    def get_sfx_text():
-        return "Effects: ON" if audio.sfx_enabled else "Effects: OFF"
+    def get_music_info():
+        if audio.music_enabled:
+            return "Music: ON", GREEN
+        else:
+            return "Music: OFF", RED
+    def get_sfx_info():
+        if audio.sfx_enabled:
+            return "Effects: ON", GREEN
+        else:
+            return "Effects: OFF", RED
     
+    music_text, music_color = get_music_info()
+    effects_text, effects_color = get_sfx_info()
+
     TITLE = UIElement((CENTER_X, 100), "SOUNDS", 50, WHITE)
-    music_btn = UIElement((CENTER_X, 300), get_music_text(), 30, WHITE, "TOGGLE_MUSIC")
-    effects_btn = UIElement((CENTER_X, 400), get_sfx_text(), 30, WHITE, "TOGGLE_SFX")
+    music_btn = UIElement((CENTER_X, 300), music_text, 30, music_color, "TOGGLE_MUSIC")
+    effects_btn = UIElement((CENTER_X, 400), effects_text, 30, effects_color, "TOGGLE_SFX")
     back_btn = UIElement((CENTER_X, 600), "Back to Options", 30, WHITE, GameState.OPTIONS)
     
     buttons = RenderUpdates(TITLE, music_btn, effects_btn, back_btn)
@@ -434,14 +443,16 @@ def sound_screen(screen):
 
             if ui_action == "TOGGLE_MUSIC":
                 audio.toggle_music()
-                button.set_text(get_music_text(), 30, WHITE)
+                new_music_text, new_music_color = get_music_info()
+                button.set_text(new_music_text, 30, new_music_color)
 
                 if audio.music_enabled:
                     audio.play_music(audio_path.menu_music, 0.5)
 
             elif ui_action == "TOGGLE_SFX":
                 audio.toggle_sfx()
-                button.set_text(get_sfx_text(), 30, WHITE)
+                new_effects_text, new_effects_color = get_sfx_info()
+                button.set_text(new_effects_text, 30, new_effects_color)
                 if audio.sfx_enabled:
                     audio.play_sfx(audio_path.hit_sound, 0.5)
 
