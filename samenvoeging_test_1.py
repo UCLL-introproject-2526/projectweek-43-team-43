@@ -25,7 +25,7 @@ YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
 GAME_BLUE = (0, 100, 255) 
 
-BLOCK_COUNT = 30
+BLOCK_COUNT = 10
 PLAYER_RADIUS = 20
 MOVEMENT_SPEED = 5 
 START_SPEED = 3
@@ -73,13 +73,22 @@ def create_blocks():
         blocks.append([x, y, size])
     return blocks
 
-def update_blocks(blocks, fall_speed):
+def update_blocks(blocks, fall_speed, current_score):
     for block in blocks:
         block[1] += fall_speed
         if block[1] > SCREEN_HEIGHT:
             block[2] = random.randint(20, 60)
             block[1] = random.randint(-150, 0)
             block[0] = random.randint(0, SCREEN_WIDTH - block[2])
+    
+    zichtbare_score = current_score // 10
+
+    extra_planeten = (zichtbare_score // 50) 
+    if len(blocks) < BLOCK_COUNT + extra_planeten:
+        size = random.randint(20, 60)
+        x = random.randint(0, SCREEN_SIZE[0] - size)
+        y = random.randint(-150, 0)
+        blocks.append([x, y, size])
 
 # --- UI CLASS ---
 
@@ -166,7 +175,7 @@ def game_loop(screen, buttons):
 
 # --- GAMEPLAY FUNCTIE ---
 
-def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large):
+def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large, player_image):
     surface.fill(BLACK)
     if background_img:
         surface.blit(background_img, (0,0))
@@ -184,8 +193,12 @@ def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, 
             pygame.draw.rect(surface, WHITE, (x_pos, y_pos, size, size))
 
     if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
-        pygame.draw.circle(surface, GAME_BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
-    
+        if player_image:
+            img_rect = player_image.get_rect(center=(int(player_x), int(player_y)))
+            surface.blit(player_image, img_rect)
+        else:
+            pygame.draw.circle(surface, GAME_BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
+
     score_display = "Score: " + str(current_score // 10)
     score_surface = FONT_SCORE.render(score_display, True, WHITE)
     surface.blit(score_surface, (SCREEN_WIDTH - 200, 20))
@@ -206,6 +219,8 @@ def play_level(screen):
     audio.play_music(audio_path.gameplay_music, 0.4)
 
     try:
+        player_image = pygame.image.load("images/spaceshipp.png").convert_alpha()
+        player_image = pygame.transform.scale(player_image, (PLAYER_RADIUS * 2, PLAYER_RADIUS * 2))
         background_image = pygame.image.load("images/galaxy.png").convert()
         background_image = pygame.transform.scale(background_image, SCREEN_SIZE)
         meteor_small = pygame.image.load("images/neptunus.png").convert_alpha()
@@ -214,7 +229,7 @@ def play_level(screen):
         heart_image = pygame.image.load("images/lives.png").convert_alpha()
         heart_image = pygame.transform.scale(heart_image, (30, 30))
     except:
-        background_image = meteor_small = meteor_medium = meteor_large = heart_image = None
+        background_image = meteor_small = meteor_medium = meteor_large = heart_image = player_image = None
 
     x, y = SCREEN_WIDTH // 2, SCREEN_HEIGHT - 100
     x_velocity = y_velocity = 0
@@ -247,7 +262,7 @@ def play_level(screen):
         y += y_velocity
         score += 1 
         fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
-        update_blocks(blocks, fall_speed)
+        update_blocks(blocks, fall_speed, score)
 
         x = max(PLAYER_RADIUS, min(x, SCREEN_WIDTH - PLAYER_RADIUS))
         y = max(PLAYER_RADIUS, min(y, SCREEN_HEIGHT - PLAYER_RADIUS))
@@ -258,14 +273,14 @@ def play_level(screen):
             if player_rect.colliderect(block_rect) and immunity_timer == 0:                
                 
                 lives -= 1
-                render_frame(screen, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large)
+                render_frame(screen, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large, player_image)
                 pygame.time.delay(300) 
                 immunity_timer = 90
                 if lives <= 0:
                     LAST_SCORE = score // 10
                     return GameState.GAMEOVER
 
-        render_frame(screen, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large)
+        render_frame(screen, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large, player_image)
 
 # --- MENU SCHERMEN ---
 
