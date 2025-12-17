@@ -21,11 +21,20 @@ YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
 GAME_BLUE = (0, 100, 255)
 
+<<<<<<< HEAD
 BLOCK_COUNT = 10
 PLAYER_RADIUS = 20
 MOVEMENT_SPEED = 5
+=======
+SCREEN_SIZE = (1024, 768)
+BLOCK_COUNT = 3
+PLAYER_RADIUS = 20
+
+MAX_BLOCKS = 15
+MOVEMENT_SPEED = 8
+>>>>>>> f1863460c90faa432117c291c8603eaa4e51b4ee
 START_SPEED = 3
-SPEED_INCREASE = 0.002
+SPEED_INCREASE = 0.0002
 MAX_SPEED = 12
 
 FONT_SCORE = None  # wordt gezet na pygame.init()
@@ -53,6 +62,19 @@ class Controls:
     def key_is_taken(self, new_key: int) -> bool:
         return new_key in [self.left, self.right, self.up, self.down]
 
+<<<<<<< HEAD
+=======
+    nieuw_totaal = BLOCK_COUNT + (zichtbare_score // 100) * 1
+
+    if nieuw_totaal > MAX_BLOCKS:
+        nieuw_totaal = MAX_BLOCKS
+
+    if len(blocks) < nieuw_totaal:
+        size = random.randint(20, 60)
+        x = random.randint(0, SCREEN_SIZE[0] - size)
+        y = random.randint(-150, 0)
+        blocks.append([x, y, size])
+>>>>>>> f1863460c90faa432117c291c8603eaa4e51b4ee
 
 class TextFactory:
     @staticmethod
