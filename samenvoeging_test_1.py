@@ -2,8 +2,6 @@ import pygame
 import pygame.freetype
 import random
 import sys
-import audio
-import audio_path
 from enum import Enum
 from pygame.sprite import Sprite, RenderUpdates
 
@@ -552,11 +550,9 @@ def main():
 
     while True:
         if game_state == GameState.TITLE:
-            audio.play_music(audio_path.menu_music, 0.5, -1)
             game_state = title_screen(screen)
 
         if game_state == GameState.PLAYING:
-            audio.play_music(audio_path.gameplay_music, 0.5, -1)
             game_state = play_level(screen)
         
         if game_state == GameState.GAMEOVER:
