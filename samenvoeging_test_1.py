@@ -2,6 +2,8 @@ import pygame
 import pygame.freetype
 import random
 import sys
+import audio
+import audio_path
 from enum import Enum
 from pygame.sprite import Sprite, RenderUpdates
 
@@ -39,15 +41,7 @@ KEY_UP = pygame.K_UP
 KEY_DOWN = pygame.K_DOWN
 
 LAST_SCORE = 0 
-MENU_BACKGROUND = None # Hier slaan we de menu achtergrond in op
 
-# --- ASSETS LADEN (Probeer te laden, anders fallback) ---
-try:
-    # Audio
-    pygame.mixer.music.load("./audio/music.mp3")
-    pygame.mixer.music.play(-1)
-except:
-    print("Let op: Muziekbestand niet gevonden.")
 
 # Fonts voor in-game (menu gebruikt freetype)
 FONT_SCORE = pygame.font.SysFont("Arial", 30, bold=True)
@@ -339,6 +333,9 @@ def play_level(screen):
                 # GAME OVER CONDITIE
                 if lives <= 0:
                     LAST_SCORE = score // 10 # Sla score op
+                        
+                    audio.play_music(audio_path.gameover_music, 0.5, 0) # Speel de korte game over muziek (0 = één keer afspelen)
+                    
                     return GameState.GAMEOVER # Ga terug naar main menu flow
 
         # Teken alles
@@ -624,12 +621,15 @@ def main():
 
     while True:
         if game_state == GameState.TITLE:
+            audio.play_music(audio_path.menu_music, 0.5, -1)
             game_state = title_screen(screen)
 
         if game_state == GameState.PLAYING:
+            audio.play_music(audio_path.gameplay_music, 0.5, -1)
             game_state = play_level(screen)
         
         if game_state == GameState.GAMEOVER:
+            audio.play_music(audio_path.menu_music, 0.5, -1)
             game_state = game_over_screen(screen)
         
         if game_state == GameState.OPTIONS:
