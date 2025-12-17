@@ -25,12 +25,13 @@ YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
 GAME_BLUE = (0, 100, 255) 
 
-BLOCK_COUNT = 2
+BLOCK_COUNT = 3
 PLAYER_RADIUS = 20
 MOVEMENT_SPEED = 5 
 START_SPEED = 3
 SPEED_INCREASE = 0.002
 MAX_SPEED = 12
+MAX_BLOCKS = 15
 
 KEY_LEFT = pygame.K_LEFT
 KEY_RIGHT = pygame.K_RIGHT
@@ -87,8 +88,13 @@ def update_blocks(blocks, fall_speed, current_score):
     
     zichtbare_score = current_score // 10
 
-    extra_planeten = (zichtbare_score // 100) 
-    if len(blocks) < BLOCK_COUNT + extra_planeten:
+    nieuw_totaal = BLOCK_COUNT + (zichtbare_score // 100) * 1
+
+    if nieuw_totaal > MAX_BLOCKS:
+        nieuw_totaal = MAX_BLOCKS
+
+ 
+    if len(blocks) < nieuw_totaal:
         size = random.randint(20, 60)
         x = random.randint(0, SCREEN_SIZE[0] - size)
         y = random.randint(-150, 0)
