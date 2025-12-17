@@ -7,7 +7,11 @@ import audio_path
 from enum import Enum
 from pygame.sprite import Sprite, RenderUpdates
 
-# --- CONSTANTEN & INSTELLINGEN ---
+# --- BASISRESOLUTIE (voor schaal) ---
+BASE_W = 1024
+BASE_H = 768
+
+# --- CONSTANTEN & INSTELLINGEN (worden overschreven bij fullscreen) ---
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 768
 SCREEN_SIZE = (SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -30,13 +34,6 @@ MAX_SPEED = 12
 
 FONT_SCORE = None  # wordt gezet na pygame.init()
 
-BLUE = (106, 159, 181) 
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
-RED = (255, 0 , 0)
-YELLOW = (255, 255, 0)
-GREEN = (0, 255, 0)
-GAME_BLUE = (0, 100, 255) 
 
 class GameState(Enum):
     QUIT = -1
@@ -48,10 +45,6 @@ class GameState(Enum):
     SOUND = 5
     CONTROLS = 6
 
-KEY_LEFT = pygame.K_LEFT
-KEY_RIGHT = pygame.K_RIGHT
-KEY_UP = pygame.K_UP
-KEY_DOWN = pygame.K_DOWN
 
 class Controls:
     """Houdt keybinds bij (vervangt de globale KEY_LEFT/... variabelen)."""
@@ -64,7 +57,6 @@ class Controls:
     def key_is_taken(self, new_key: int) -> bool:
         return new_key in [self.left, self.right, self.up, self.down]
 
-# --- HULPFUNCTIES ---
 
 class TextFactory:
     @staticmethod
@@ -136,27 +128,30 @@ class MenuScreenBase:
 
 class TitleScreen(MenuScreenBase):
     def build_buttons(self):
-        start_btn = UIElement((CENTER_X, 250), "Start Game", 50, WHITE, GameState.PLAYING)
-        options_btn = UIElement((CENTER_X, 400), "Options", 50, WHITE, GameState.OPTIONS)
-        quit_btn = UIElement((CENTER_X, 550), "Afsluiten", 50, WHITE, GameState.QUIT)
+        g = self.game
+        start_btn = UIElement((CENTER_X, g.sy(250)), "Start Game", g.sf(50), WHITE, GameState.PLAYING)
+        options_btn = UIElement((CENTER_X, g.sy(400)), "Options", g.sf(50), WHITE, GameState.OPTIONS)
+        quit_btn = UIElement((CENTER_X, g.sy(550)), "Afsluiten", g.sf(50), WHITE, GameState.QUIT)
         return RenderUpdates(start_btn, options_btn, quit_btn)
 
 
 class OptionsScreen(MenuScreenBase):
     def build_buttons(self):
-        title = UIElement((CENTER_X, 150), "SETTINGS", 70, WHITE)
-        sound_btn = UIElement((CENTER_X, 300), "Sound", 40, WHITE, GameState.SOUND)
-        controls_btn = UIElement((CENTER_X, 450), "CONTROLS", 40, WHITE, GameState.CONTROLS)
-        back_btn = UIElement((CENTER_X, 600), "Back", 40, WHITE, GameState.TITLE)
+        g = self.game
+        title = UIElement((CENTER_X, g.sy(150)), "SETTINGS", g.sf(70), WHITE)
+        sound_btn = UIElement((CENTER_X, g.sy(300)), "Sound", g.sf(40), WHITE, GameState.SOUND)
+        controls_btn = UIElement((CENTER_X, g.sy(450)), "CONTROLS", g.sf(40), WHITE, GameState.CONTROLS)
+        back_btn = UIElement((CENTER_X, g.sy(600)), "Back", g.sf(40), WHITE, GameState.TITLE)
         return RenderUpdates(title, back_btn, controls_btn, sound_btn)
 
 
 class GameOverScreen(MenuScreenBase):
     def build_buttons(self):
-        tekst_btn = UIElement((CENTER_X, 150), "GAME OVER", 60, RED)
-        score_display = UIElement((CENTER_X, 250), f"Jouw Score: {self.game.last_score}", 40, YELLOW)
-        restart_btn = UIElement((CENTER_X, 400), "Opnieuw spelen", 30, WHITE, GameState.PLAYING)
-        menu_btn = UIElement((CENTER_X, 500), "Hoofdmenu", 30, WHITE, GameState.TITLE)
+        g = self.game
+        tekst_btn = UIElement((CENTER_X, g.sy(150)), "GAME OVER", g.sf(60), RED)
+        score_display = UIElement((CENTER_X, g.sy(250)), f"Jouw Score: {g.last_score}", g.sf(40), YELLOW)
+        restart_btn = UIElement((CENTER_X, g.sy(400)), "Opnieuw spelen", g.sf(30), WHITE, GameState.PLAYING)
+        menu_btn = UIElement((CENTER_X, g.sy(500)), "Hoofdmenu", g.sf(30), WHITE, GameState.TITLE)
         return RenderUpdates(tekst_btn, score_display, restart_btn, menu_btn)
 
 
@@ -172,25 +167,25 @@ class ControlsScreen:
                 if event.type == pygame.KEYDOWN:
                     return event.key
 
-    @staticmethod
-    def show_taken_error(button: UIElement, screen):
-        font = pygame.freetype.SysFont("Arial", 25, bold=True)
+    def show_taken_error(self, button: UIElement, screen):
+        font = pygame.freetype.SysFont("Arial", self.game.sf(25), bold=True)
         text_surf, text_rect = font.render("KEY ALREADY TAKEN!", fgcolor=RED, bgcolor=None)
-        x = button.rect.right + 20
+        x = button.rect.right + self.game.sx(20)
         y = button.rect.centery - (text_rect.height / 2)
         screen.blit(text_surf, (x, y))
         pygame.display.flip()
         pygame.time.delay(1000)
 
     def run(self, screen) -> GameState:
-        c = self.game.controls
+        g = self.game
+        c = g.controls
 
-        title = UIElement((CENTER_X, 100), "CLICK TO CHANGE KEYS", 50, WHITE)
-        btn_left = UIElement((CENTER_X, 200), f"move left: {pygame.key.name(c.left).upper()}", 25, WHITE, "CHANGE_LEFT")
-        btn_right = UIElement((CENTER_X, 300), f"move right: {pygame.key.name(c.right).upper()}", 25, WHITE, "CHANGE_RIGHT")
-        btn_down = UIElement((CENTER_X, 400), f"move down: {pygame.key.name(c.down).upper()}", 25, WHITE, "CHANGE_DOWN")
-        btn_up = UIElement((CENTER_X, 500), f"move up: {pygame.key.name(c.up).upper()}", 25, WHITE, "CHANGE_UP")
-        back_btn = UIElement((CENTER_X, 600), "Back to Options", 30, WHITE, GameState.OPTIONS)
+        title = UIElement((CENTER_X, g.sy(100)), "CLICK TO CHANGE KEYS", g.sf(50), WHITE)
+        btn_left = UIElement((CENTER_X, g.sy(200)), f"move left: {pygame.key.name(c.left).upper()}", g.sf(25), WHITE, "CHANGE_LEFT")
+        btn_right = UIElement((CENTER_X, g.sy(300)), f"move right: {pygame.key.name(c.right).upper()}", g.sf(25), WHITE, "CHANGE_RIGHT")
+        btn_down = UIElement((CENTER_X, g.sy(400)), f"move down: {pygame.key.name(c.down).upper()}", g.sf(25), WHITE, "CHANGE_DOWN")
+        btn_up = UIElement((CENTER_X, g.sy(500)), f"move up: {pygame.key.name(c.up).upper()}", g.sf(25), WHITE, "CHANGE_UP")
+        back_btn = UIElement((CENTER_X, g.sy(600)), "Back to Options", g.sf(30), WHITE, GameState.OPTIONS)
 
         buttons = RenderUpdates(title, btn_left, btn_right, btn_down, btn_up, back_btn)
 
@@ -202,7 +197,7 @@ class ControlsScreen:
                 if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     mouse_up = True
 
-            self.game.draw_menu_background(screen)
+            g.draw_menu_background(screen)
 
             for button in buttons:
                 ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
@@ -211,7 +206,7 @@ class ControlsScreen:
                     if isinstance(ui_action, GameState):
                         return ui_action
 
-                    button.set_text("PRESS KEY...", 25, YELLOW)
+                    button.set_text("PRESS KEY...", g.sf(25), YELLOW)
                     button.draw(screen)
                     pygame.display.flip()
                     new = self.wait_for_key()
@@ -229,10 +224,10 @@ class ControlsScreen:
                         self.show_taken_error(button, screen)
 
                     # Update alle teksten
-                    btn_left.set_text(f"move left: {pygame.key.name(c.left).upper()}", 25, WHITE)
-                    btn_right.set_text(f"move right: {pygame.key.name(c.right).upper()}", 25, WHITE)
-                    btn_down.set_text(f"move down: {pygame.key.name(c.down).upper()}", 25, WHITE)
-                    btn_up.set_text(f"move up: {pygame.key.name(c.up).upper()}", 25, WHITE)
+                    btn_left.set_text(f"move left: {pygame.key.name(c.left).upper()}", g.sf(25), WHITE)
+                    btn_right.set_text(f"move right: {pygame.key.name(c.right).upper()}", g.sf(25), WHITE)
+                    btn_down.set_text(f"move down: {pygame.key.name(c.down).upper()}", g.sf(25), WHITE)
+                    btn_up.set_text(f"move up: {pygame.key.name(c.up).upper()}", g.sf(25), WHITE)
 
                 button.draw(screen)
 
@@ -259,14 +254,15 @@ class SoundScreen:
             return "Effects: OFF", RED
 
     def run(self, screen) -> GameState:
+        g = self.game
 
         music_text, music_col = self.get_music_info()
         effects_text, effects_col = self.get_sfx_info()
 
-        title = UIElement((CENTER_X, 100), "SOUNDS", 50, WHITE)
-        music_btn = UIElement((CENTER_X, 300), music_text, 30, music_col, "TOGGLE_MUSIC")
-        effects_btn = UIElement((CENTER_X, 400), effects_text, 30, effects_col, "TOGGLE_SFX")
-        back_btn = UIElement((CENTER_X, 600), "Back to Options", 30, WHITE, GameState.OPTIONS)
+        title = UIElement((CENTER_X, g.sy(100)), "SOUNDS", g.sf(50), WHITE)
+        music_btn = UIElement((CENTER_X, g.sy(300)), music_text, g.sf(30), music_col, "TOGGLE_MUSIC")
+        effects_btn = UIElement((CENTER_X, g.sy(400)), effects_text, g.sf(30), effects_col, "TOGGLE_SFX")
+        back_btn = UIElement((CENTER_X, g.sy(600)), "Back to Options", g.sf(30), WHITE, GameState.OPTIONS)
 
         buttons = RenderUpdates(title, music_btn, effects_btn, back_btn)
 
@@ -278,7 +274,7 @@ class SoundScreen:
                 if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     mouse_up = True
 
-            self.game.draw_menu_background(screen)
+            g.draw_menu_background(screen)
 
             for button in buttons:
                 ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
@@ -286,15 +282,14 @@ class SoundScreen:
                 if ui_action == "TOGGLE_MUSIC":
                     audio.toggle_music()
                     new_music_text, new_music_col = self.get_music_info()
-                    button.set_text(new_music_text, 30, new_music_col)
-
+                    button.set_text(new_music_text, g.sf(30), new_music_col)
                     if audio.music_enabled:
                         audio.play_music(audio_path.menu_music, 0.5)
 
                 elif ui_action == "TOGGLE_SFX":
                     audio.toggle_sfx()
                     new_effects_text, new_effects_col = self.get_sfx_info()
-                    button.set_text(new_effects_text, 30, new_effects_col)
+                    button.set_text(new_effects_text, g.sf(30), new_effects_col)
                     if audio.sfx_enabled:
                         audio.play_sfx(audio_path.hit_sound, 0.5)
 
@@ -408,9 +403,7 @@ class LevelSession:
         pygame.display.flip()
 
     def run(self, screen) -> GameState:
-        # Start gameplay muziek
         audio.play_music(audio_path.gameplay_music, 0.4)
-
         self.load_assets()
 
         c = self.game.controls
@@ -469,7 +462,6 @@ class LevelSession:
                 block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
                 if player_rect.colliderect(block_rect) and immunity_timer == 0:
                     lives -= 1
-
                     if lives > 0:
                         audio.play_sfx(audio_path.hit_sound, 0.5)
                         self.render_frame(screen, blocks, x, y, score, lives, 1)
@@ -494,6 +486,7 @@ class Game:
         self.last_score = 0
         self.menu_background = None
 
+        # ✅ FULLSCREEN + update globals
         global SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_SIZE, CENTER_X
         self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
         SCREEN_WIDTH, SCREEN_HEIGHT = self.screen.get_size()
@@ -511,6 +504,17 @@ class Game:
         self.sound_screen = SoundScreen(self)
         self.game_over_screen = GameOverScreen(self)
 
+    # --- DYNAMISCHE SCHAAL HELPERS ---
+    def sx(self, x: float) -> int:
+        return int(x * (SCREEN_WIDTH / BASE_W))
+
+    def sy(self, y: float) -> int:
+        return int(y * (SCREEN_HEIGHT / BASE_H))
+
+    def sf(self, size: float) -> int:
+        scale = min(SCREEN_WIDTH / BASE_W, SCREEN_HEIGHT / BASE_H)
+        return max(12, int(size * scale))
+
     def _load_menu_background(self):
         try:
             self.menu_background = pygame.image.load("images/background.png").convert()
@@ -526,7 +530,6 @@ class Game:
 
     def game_loop(self, screen, buttons: RenderUpdates) -> GameState:
         while True:
-            # Check of muziek is afgelopen (voor overgang Game Over -> Menu)
             if not pygame.mixer.music.get_busy():
                 audio.play_music(audio_path.menu_music, 0.5)
 
@@ -559,7 +562,6 @@ class Game:
                 game_state = LevelSession(self).run(self.screen)
 
             elif game_state == GameState.GAMEOVER:
-                # Speel de clip 1 keer af
                 audio.play_music(audio_path.gameover_music, 0.5, loop=0)
                 game_state = self.game_over_screen.run(self.screen)
 
