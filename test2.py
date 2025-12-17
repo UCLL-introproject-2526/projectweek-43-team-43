@@ -170,6 +170,7 @@ def main():
     running = True
     while running:
         clock.tick(60)
+        is_portal_active = (score // 10 >= 500 and not level_flipped)
 
         if immunity_timer > 0:
             immunity_timer -= 1
@@ -199,8 +200,14 @@ def main():
                     y_velocity = 0
 
         
-        x += x_velocity
-        y += y_velocity
+        if not (score // 10 >= 500 and not level_flipped):           
+            x += x_velocity
+            y += y_velocity
+        else:            
+            x_velocity = 0
+            y_velocity = 0
+
+
         score += 1
 
         if not level_flipped:
@@ -229,7 +236,7 @@ def main():
 
 
         portal_rect = None
-        if score // 10 >= 100 and not level_flipped:
+        if score // 10 >= 500 and not level_flipped:
             portal_active = True
             
             portal_rect = pygame.Rect(SCREEN_SIZE[0]//2 - 100, 20, 200, 40)
@@ -279,7 +286,8 @@ def main():
         for block in blocks:
             block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
             
-            if player_rect.colliderect(block_rect) and immunity_timer == 0:                
+            
+            if player_rect.colliderect(block_rect) and immunity_timer == 0 and not is_portal_active:                
                 lives -= 1
                 render_frame(surface, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large, player_img, portal_rect, portal_img )
                 pygame.time.delay(300)
