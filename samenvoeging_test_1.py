@@ -5,26 +5,22 @@ import sys
 from enum import Enum
 from pygame.sprite import Sprite, RenderUpdates
 
-# --- INITIALISATIE ---
 pygame.init()
 pygame.mixer.init()
 
-# --- CONSTANTEN & INSTELLINGEN ---
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 768
 SCREEN_SIZE = (SCREEN_WIDTH, SCREEN_HEIGHT)
 CENTER_X = SCREEN_WIDTH / 2
 
-# Kleuren
-BLUE = (106, 159, 181) # Wordt nu alleen gebruikt als fallback als de achtergrond niet laadt
+BLUE = (106, 159, 181) 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0 , 0)
 YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
-GAME_BLUE = (0, 100, 255) # Speler kleur
+GAME_BLUE = (0, 100, 255) 
 
-# Gameplay Instellingen
 BLOCK_COUNT = 30
 PLAYER_RADIUS = 20
 MOVEMENT_SPEED = 5 
@@ -32,24 +28,20 @@ START_SPEED = 3
 SPEED_INCREASE = 0.002
 MAX_SPEED = 12
 
-# Globale Variabelen
 KEY_LEFT = pygame.K_LEFT
 KEY_RIGHT = pygame.K_RIGHT
 KEY_UP = pygame.K_UP
 KEY_DOWN = pygame.K_DOWN
 
 LAST_SCORE = 0 
-MENU_BACKGROUND = None # Hier slaan we de menu achtergrond in op
+MENU_BACKGROUND = None 
 
-# --- ASSETS LADEN (Probeer te laden, anders fallback) ---
 try:
-    # Audio
     pygame.mixer.music.load("./audio/music.mp3")
     pygame.mixer.music.play(-1)
 except:
     print("Let op: Muziekbestand niet gevonden.")
 
-# Fonts voor in-game (menu gebruikt freetype)
 FONT_SCORE = pygame.font.SysFont("Arial", 30, bold=True)
 
 class GameState(Enum):
@@ -62,24 +54,17 @@ class GameState(Enum):
     SOUND = 5
     CONTROLS = 6
 
-# --- HULPFUNCTIES ---
-
-# AANGEPAST: bg_rgb parameter verwijderd
 def create_surface_with_text(text, font_size, text_rgb):
-    """ Hulpfunctie om tekst om te zetten in een plaatje (Transparant) """
     font = pygame.freetype.SysFont("Courier", font_size, bold=True)
-    # AANGEPAST: bgcolor=None zorgt voor transparante achtergrond
     surface, _ = font.render(text=text, fgcolor=text_rgb, bgcolor=None)
     return surface.convert_alpha()
 
 def key_is_taken(new_key):
-    """ Controleer of de toets al in gebruik is """
     if new_key == KEY_LEFT or new_key == KEY_RIGHT or new_key == KEY_UP or new_key == KEY_DOWN:
         return True
     return False
 
 def create_blocks():
-    """ Maakt de blokken aan voor het spel """
     blocks = []
     for _ in range(BLOCK_COUNT):
         size = random.randint(20,60)
@@ -89,29 +74,22 @@ def create_blocks():
     return blocks
 
 def update_blocks(blocks, fall_speed):
-    """ Beweegt blokken omlaag en reset ze als ze beneden zijn """
     for block in blocks:
         block[1] += fall_speed
         if block[1] > SCREEN_HEIGHT:
-            block[2] = random.randint(20, 60) # Nieuwe grootte
-            block[1] = random.randint(-150, 0) # Nieuwe hoogte (boven scherm)
-            block[0] = random.randint(0, SCREEN_WIDTH - block[2]) # Nieuwe X
-
-# --- UI CLASS ---
+            block[2] = random.randint(20, 60) 
+            block[1] = random.randint(-150, 0) 
+            block[0] = random.randint(0, SCREEN_WIDTH - block[2]) 
 
 class UIElement(Sprite):
-    # AANGEPAST: bg_rgb verwijderd uit __init__
     def __init__(self, center_position, text, font_size, text_rgb, action=None):
         super().__init__()
         self.mouse_over = False 
         self.action = action 
         
-        # Sla basis waarden op voor set_text
         self.font_size = font_size
-        # self.bg_rgb = bg_rgb # NIET MEER NODIG
         self.text_rgb = text_rgb
 
-        # AANGEPAST: aanroep zonder bg_rgb
         default_image = create_surface_with_text(text, font_size, text_rgb)
         highlighted_image = create_surface_with_text(text, int(font_size * 1.2), text_rgb)
 
@@ -121,9 +99,7 @@ class UIElement(Sprite):
             highlighted_image.get_rect(center=center_position),
         ]
 
-    # AANGEPAST: bg_rgb verwijderd uit set_text
     def set_text(self, text, font_size, text_rgb):
-        # AANGEPAST: aanroep zonder bg_rgb
         default_image = create_surface_with_text(text, font_size, text_rgb)
         highlighted_image = create_surface_with_text(text, int(font_size * 1.2), text_rgb)
 
@@ -155,9 +131,6 @@ class UIElement(Sprite):
     def draw(self, surface):
         surface.blit(self.image, self.rect)
 
-
-# --- ALGEMENE FUNCTIES ---
-
 def wait_for_key():
     while True:
         for event in pygame.event.get():
@@ -165,7 +138,6 @@ def wait_for_key():
                 return event.key
 
 def game_loop(screen, buttons):
-    """ De standaard loop voor menu schermen """
     while True:
         mouse_up = False
         for event in pygame.event.get():
@@ -174,7 +146,6 @@ def game_loop(screen, buttons):
             if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 mouse_up = True
 
-        # --- ACHTERGROND TEKENEN ---
         if MENU_BACKGROUND:
             screen.blit(MENU_BACKGROUND, (0,0))
         else:
@@ -188,15 +159,11 @@ def game_loop(screen, buttons):
 
         pygame.display.flip()
 
-# --- GAMEPLAY FUNCTIE ---
-
 def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large):
-    """ Tekent alles tijdens het spelen """
     surface.fill(BLACK)
     if background_img:
         surface.blit(background_img, (0,0))
     
-    # Teken meteorieten
     for block in blocks:
         x_pos, y_pos, size = block[0], block[1], block[2]
 
@@ -212,25 +179,19 @@ def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, 
             scaled_meteor = pygame.transform.scale(chosen_img, (size, size))
             surface.blit(scaled_meteor, (x_pos, y_pos))
         else:
-            # Fallback als plaatjes missen: teken vierkantjes
             pygame.draw.rect(surface, WHITE, (x_pos, y_pos, size, size))
 
-
-    # Teken speler (flikkert als immunity aan staat)
     if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
         pygame.draw.circle(surface, GAME_BLUE, (int(player_x), int(player_y)), PLAYER_RADIUS)
     
-    # HUD: Score
     score_display = "Score: " + str(current_score // 10)
     score_surface = FONT_SCORE.render(score_display, True, WHITE)
     surface.blit(score_surface, (SCREEN_WIDTH - 200, 20))
     
-    # HUD: Levens
     if heart_img:
         for i in range(current_lives):
             surface.blit(heart_img, (20 + (i * 35), 20))
     else:
-        # Fallback tekst voor levens
         lives_surface = FONT_SCORE.render(f"Lives: {current_lives}", True, RED)
         surface.blit(lives_surface, (20, 20))
     
@@ -239,12 +200,11 @@ def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, 
 def play_level(screen):
     global LAST_SCORE
     
-    # --- ASSETS LADEN VOOR DE GAME ---
     try:
         background_image = pygame.image.load("images/galaxy.png").convert()
         background_image = pygame.transform.scale(background_image, SCREEN_SIZE)
 
-        meteor_small = pygame.image.load("images/neptunus.png").convert_alpha()
+        meteor_small = pygame.image.load("images/meteoriet2.png").convert_alpha()
         meteor_medium = pygame.image.load("images/mars.png").convert_alpha()
         meteor_large = pygame.image.load("images/jupiter.png").convert_alpha()
         
@@ -258,7 +218,6 @@ def play_level(screen):
         meteor_large = None
         heart_image = None
 
-    # Variabelen resetten voor nieuwe ronde
     x = SCREEN_WIDTH // 2
     y = SCREEN_HEIGHT - 100
     x_velocity = 0
@@ -273,7 +232,6 @@ def play_level(screen):
     clock = pygame.time.Clock()
     running = True
 
-    # --- GAME LOOP ---
     while running:
         clock.tick(60)
 
@@ -286,10 +244,8 @@ def play_level(screen):
             
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    # Pauze of terug naar menu? Laten we teruggaan naar menu.
                     return GameState.TITLE 
                 
-                # --- HIER GEBRUIKEN WE DE GLOBALE CONTROLS ---
                 if event.key == KEY_RIGHT: 
                     x_velocity = MOVEMENT_SPEED
                 if event.key == KEY_LEFT: 
@@ -309,43 +265,33 @@ def play_level(screen):
                 if event.key == KEY_DOWN and y_velocity > 0:
                     y_velocity = 0
 
-        # Positie updaten
         x += x_velocity
         y += y_velocity
         score += 1 
         fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
         update_blocks(blocks, fall_speed)
 
-        # Muren (Grenzen)
         if x < PLAYER_RADIUS: x = PLAYER_RADIUS
         if x > SCREEN_WIDTH - PLAYER_RADIUS: x = SCREEN_WIDTH - PLAYER_RADIUS
         if y < PLAYER_RADIUS: y = PLAYER_RADIUS
         if y > SCREEN_HEIGHT - PLAYER_RADIUS: y = SCREEN_HEIGHT - PLAYER_RADIUS
 
-        # Botsing Detectie
         player_rect = pygame.Rect(x - PLAYER_RADIUS, y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
         
         for block in blocks:
-            # Hitbox van blokje
             block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
             
             if player_rect.colliderect(block_rect) and immunity_timer == 0:                
                 lives -= 1
-                # Even de frame tekenen zodat je ziet dat je geraakt bent
                 render_frame(screen, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large)
-                pygame.time.delay(300) # Korte pauze
+                pygame.time.delay(300) 
                 immunity_timer = 90
                 
-                # GAME OVER CONDITIE
                 if lives <= 0:
-                    LAST_SCORE = score // 10 # Sla score op
-                    return GameState.GAMEOVER # Ga terug naar main menu flow
+                    LAST_SCORE = score // 10 
+                    return GameState.GAMEOVER 
 
-        # Teken alles
         render_frame(screen, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large)
-
-
-# --- MENU SCHERMEN (AANGEPAST: GEEN BLUE MEER) ---
 
 def title_screen(screen):
     start_btn = UIElement(
@@ -469,7 +415,6 @@ def control_screen(screen):
             if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 mouse_up = True
         
-        # --- ACHTERGROND TEKENEN ---
         if MENU_BACKGROUND:
             screen.blit(MENU_BACKGROUND, (0,0))
         else:
@@ -482,10 +427,8 @@ def control_screen(screen):
                 if isinstance(ui_action, GameState):
                     return ui_action
                 
-                # Key Remapping Logic
                 current_key_name = ""
                 if ui_action == "CHANGE_LEFT":
-                    # AANGEPAST: geen BLUE meer
                     button.set_text("PRESS KEY...", 25, YELLOW)
                     button.draw(screen); pygame.display.flip()
                     new = wait_for_key()
@@ -521,8 +464,6 @@ def control_screen(screen):
         pygame.display.flip()
 
 def show_taken_error(button, screen):
-    """ Klein hulpje om 'KEY TAKEN' te laten zien """
-    # AANGEPAST: geen BLUE meer
     button.set_text("KEY TAKEN!", 25, RED)
     button.draw(screen)
     pygame.display.flip()
@@ -564,7 +505,6 @@ def sound_screen(screen):
     return game_loop(screen, RenderUpdates(TITLE, music_btn, effects_btn, back_btn))
 
 def game_over_screen(screen):
-    # Toon Game Over tekst
     tekst_btn = UIElement(
         center_position=(CENTER_X, 150),
         font_size=60,
@@ -573,7 +513,6 @@ def game_over_screen(screen):
         action=None,
     )
     
-    # Toon behaalde score (uit LAST_SCORE)
     score_display = UIElement(
         center_position=(CENTER_X, 250),
         font_size=40,
@@ -598,22 +537,16 @@ def game_over_screen(screen):
     )
     return game_loop(screen, RenderUpdates(tekst_btn, score_display, restart_btn, menu_btn))
 
-
-# --- MAIN ---
-
 def main():
     global MENU_BACKGROUND
     screen = pygame.display.set_mode(SCREEN_SIZE)
     pygame.display.set_caption("Dodge Blocks - Full Game")
     
-    # --- LAAD MENU ACHTERGROND ---
     try:
-        # Probeer eerst in images map
         MENU_BACKGROUND = pygame.image.load("images/background.png").convert()
         MENU_BACKGROUND = pygame.transform.scale(MENU_BACKGROUND, SCREEN_SIZE)
     except FileNotFoundError:
         try:
-            # Probeer root als fallback
             MENU_BACKGROUND = pygame.image.load("background.png").convert()
             MENU_BACKGROUND = pygame.transform.scale(MENU_BACKGROUND, SCREEN_SIZE)
         except:
