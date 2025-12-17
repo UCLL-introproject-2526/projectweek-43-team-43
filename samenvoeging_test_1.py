@@ -271,12 +271,13 @@ def play_level(screen):
         for block in blocks:
             block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
             if player_rect.colliderect(block_rect) and immunity_timer == 0:                
-                audio.play_sfx(audio_path.hit_sound, 0.5)
                 lives -= 1
-                render_frame(screen, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large, player_image)
-                pygame.time.delay(300) 
-                immunity_timer = 90
-                if lives <= 0:
+                if lives > 0:
+                    audio.play_sfx(audio_path.hit_sound, 0.5)
+                    render_frame(screen, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large, player_image)
+                    pygame.time.delay(300) 
+                    immunity_timer = 90
+                else:
                     LAST_SCORE = score // 10
                     return GameState.GAMEOVER
 
