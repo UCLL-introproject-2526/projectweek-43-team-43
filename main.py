@@ -245,17 +245,27 @@ class SoundScreen:
         self.game = game
 
     @staticmethod
-    def get_music_text():
-        return "Music: ON" if audio.music_enabled else "Music: OFF"
+    def get_music_info():
+        if audio.music_enabled:
+            return "Music: ON", GREEN
+        else:
+            return "Music: OFF", RED
 
     @staticmethod
-    def get_sfx_text():
-        return "Effects: ON" if audio.sfx_enabled else "Effects: OFF"
+    def get_sfx_info():
+        if audio.sfx_enabled:
+            return "Effects: ON", GREEN
+        else:
+            return "Effects: OFF", RED
 
     def run(self, screen) -> GameState:
+
+        music_text, music_col = self.get_music_info()
+        effects_text, effects_col = self.get_sfx_info()
+
         title = UIElement((CENTER_X, 100), "SOUNDS", 50, WHITE)
-        music_btn = UIElement((CENTER_X, 300), self.get_music_text(), 30, WHITE, "TOGGLE_MUSIC")
-        effects_btn = UIElement((CENTER_X, 400), self.get_sfx_text(), 30, WHITE, "TOGGLE_SFX")
+        music_btn = UIElement((CENTER_X, 300), music_text, 30, music_col, "TOGGLE_MUSIC")
+        effects_btn = UIElement((CENTER_X, 400), effects_text, 30, effects_col, "TOGGLE_SFX")
         back_btn = UIElement((CENTER_X, 600), "Back to Options", 30, WHITE, GameState.OPTIONS)
 
         buttons = RenderUpdates(title, music_btn, effects_btn, back_btn)
@@ -275,14 +285,16 @@ class SoundScreen:
 
                 if ui_action == "TOGGLE_MUSIC":
                     audio.toggle_music()
-                    button.set_text(self.get_music_text(), 30, WHITE)
+                    new_music_text, new_music_col = self.get_music_info()
+                    button.set_text(new_music_text, 30, new_music_col)
 
                     if audio.music_enabled:
                         audio.play_music(audio_path.menu_music, 0.5)
 
                 elif ui_action == "TOGGLE_SFX":
                     audio.toggle_sfx()
-                    button.set_text(self.get_sfx_text(), 30, WHITE)
+                    new_effects_text, new_effects_col = self.get_sfx_info()
+                    button.set_text(new_effects_text, 30, new_effects_col)
                     if audio.sfx_enabled:
                         audio.play_sfx(audio_path.hit_sound, 0.5)
 
