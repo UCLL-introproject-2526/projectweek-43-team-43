@@ -73,13 +73,22 @@ def create_blocks():
         blocks.append([x, y, size])
     return blocks
 
-def update_blocks(blocks, fall_speed):
+def update_blocks(blocks, fall_speed, current_score):
     for block in blocks:
         block[1] += fall_speed
         if block[1] > SCREEN_HEIGHT:
             block[2] = random.randint(20, 60)
             block[1] = random.randint(-150, 0)
             block[0] = random.randint(0, SCREEN_WIDTH - block[2])
+    
+    zichtbare_score = current_score // 10
+
+    extra_planeten = (zichtbare_score // 50) 
+    if len(blocks) < BLOCK_COUNT + extra_planeten:
+        size = random.randint(20, 60)
+        x = random.randint(0, SCREEN_SIZE[0] - size)
+        y = random.randint(-150, 0)
+        blocks.append([x, y, size])
 
 # --- UI CLASS ---
 
@@ -253,7 +262,7 @@ def play_level(screen):
         y += y_velocity
         score += 1 
         fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
-        update_blocks(blocks, fall_speed)
+        update_blocks(blocks, fall_speed, score)
 
         x = max(PLAYER_RADIUS, min(x, SCREEN_WIDTH - PLAYER_RADIUS))
         y = max(PLAYER_RADIUS, min(y, SCREEN_HEIGHT - PLAYER_RADIUS))
