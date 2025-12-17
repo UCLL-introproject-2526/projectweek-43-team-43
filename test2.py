@@ -120,9 +120,9 @@ def main():
     background_image = pygame.image.load("images/galaxy.png").convert()
     background_image = pygame.transform.scale(background_image, SCREEN_SIZE)
 
-    meteor_small = pygame.image.load("images/meteoriet2.png").convert()
-    meteor_medium = pygame.image.load("images/mars.png").convert()
-    meteor_large = pygame.image.load("images/jupiter.png").convert()
+    meteor_small = pygame.image.load("images/neptunus.png").convert_alpha()
+    meteor_medium = pygame.image.load("images/mars.png").convert_alpha()
+    meteor_large = pygame.image.load("images/jupiter.png").convert_alpha()
 
 
     
