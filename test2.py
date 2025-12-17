@@ -12,9 +12,10 @@ BLUE = (0, 100, 255)
 GREEN = (0, 255, 0)
 
 SCREEN_SIZE = (1024, 768)
-BLOCK_COUNT = 1
+BLOCK_COUNT = 3
 PLAYER_RADIUS = 20
 
+MAX_BLOCKS = 15
 MOVEMENT_SPEED = 8
 START_SPEED = 3
 SPEED_INCREASE = 0.002
@@ -51,8 +52,12 @@ def update_blocks(blocks, fall_speed, current_score):
 
     zichtbare_score = current_score // 10
 
-    extra_planeten = (zichtbare_score // 200) * 2
-    if len(blocks) < BLOCK_COUNT + extra_planeten:
+    nieuw_totaal = BLOCK_COUNT + (zichtbare_score // 100) * 1
+
+    if nieuw_totaal > MAX_BLOCKS:
+        nieuw_totaal = MAX_BLOCKS
+
+    if len(blocks) < nieuw_totaal:
         size = random.randint(20, 60)
         x = random.randint(0, SCREEN_SIZE[0] - size)
         y = random.randint(-150, 0)
