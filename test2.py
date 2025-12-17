@@ -12,7 +12,7 @@ BLUE = (0, 100, 255)
 GREEN = (0, 255, 0)
 
 SCREEN_SIZE = (1024, 768)
-BLOCK_COUNT = 15
+BLOCK_COUNT = 1
 PLAYER_RADIUS = 20
 
 MOVEMENT_SPEED = 8
@@ -37,13 +37,22 @@ def create_blocks():
         blocks.append([x, y, size])
     return blocks
 
-def update_blocks(blocks, fall_speed):
+def update_blocks(blocks, fall_speed, current_score):
     for block in blocks:
         block[1] += fall_speed
         if block[1] > SCREEN_SIZE[1]:
             block[2] = random.randint(20, 60)
             block[1] = random.randint(-150, 0)
             block[0] = random.randint(0, SCREEN_SIZE[0] - block[2])
+
+    zichtbare_score = current_score // 10
+
+    extra_planeten = (zichtbare_score // 200) * 2
+    if len(blocks) < BLOCK_COUNT + extra_planeten:
+        size = random.randint(20, 60)
+        x = random.randint(0, SCREEN_SIZE[0] - size)
+        y = random.randint(-150, 0)
+        blocks.append([x, y, size])
 
 def show_game_over(surface, final_score):
     waiting = True
@@ -179,7 +188,7 @@ def main():
         y += y_velocity
         score += 1 
         fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
-        update_blocks(blocks, fall_speed)
+        update_blocks(blocks, fall_speed, score)
 
         if x < PLAYER_RADIUS:
             x = PLAYER_RADIUS
