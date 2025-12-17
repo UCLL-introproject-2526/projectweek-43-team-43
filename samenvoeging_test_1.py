@@ -256,6 +256,7 @@ def play_level(screen):
         for block in blocks:
             block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
             if player_rect.colliderect(block_rect) and immunity_timer == 0:                
+                
                 lives -= 1
                 render_frame(screen, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large)
                 pygame.time.delay(300) 
@@ -332,10 +333,16 @@ def show_taken_error(button, screen):
     pygame.time.delay(800)
 
 def sound_screen(screen):
+    def get_music_text():
+        return "Music: ON" if audio.music_enabled else "Music: OFF"
+    def get_sfx_text():
+        return "Effects: ON" if audio.sfx_enabled else "Effects: OFF"
+    
     TITLE = UIElement((CENTER_X, 100), "SOUNDS", 50, WHITE)
-    music_btn = UIElement((CENTER_X, 300), "Muziek: On/Off", 30, WHITE)
-    effects_btn = UIElement((CENTER_X, 400), "Effects: On/Off", 30, WHITE)
+    music_btn = UIElement((CENTER_X, 300), get_music_text(), 30, WHITE)
+    effects_btn = UIElement((CENTER_X, 400), get_sfx_text(), 30, WHITE)
     back_btn = UIElement((CENTER_X, 600), "Back to Options", 30, WHITE, GameState.OPTIONS)
+    
     return game_loop(screen, RenderUpdates(TITLE, music_btn, effects_btn, back_btn))
 
 def game_over_screen(screen):

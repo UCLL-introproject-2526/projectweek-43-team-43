@@ -5,3 +5,4 @@ gameover_music = './audio/gameover_music.mp3'
 
 
 #Effecten
+hit_sound = './audio/hit.mp3'
