@@ -271,7 +271,7 @@ def play_level(screen):
         for block in blocks:
             block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
             if player_rect.colliderect(block_rect) and immunity_timer == 0:                
-                
+                audio.play_sfx(audio_path.hit_sound, 0.5)
                 lives -= 1
                 render_frame(screen, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large, player_image)
                 pygame.time.delay(300) 
@@ -354,11 +354,43 @@ def sound_screen(screen):
         return "Effects: ON" if audio.sfx_enabled else "Effects: OFF"
     
     TITLE = UIElement((CENTER_X, 100), "SOUNDS", 50, WHITE)
-    music_btn = UIElement((CENTER_X, 300), get_music_text(), 30, WHITE)
-    effects_btn = UIElement((CENTER_X, 400), get_sfx_text(), 30, WHITE)
+    music_btn = UIElement((CENTER_X, 300), get_music_text(), 30, WHITE, "TOGGLE_MUSIC")
+    effects_btn = UIElement((CENTER_X, 400), get_sfx_text(), 30, WHITE, "TOGGLE_SFX")
     back_btn = UIElement((CENTER_X, 600), "Back to Options", 30, WHITE, GameState.OPTIONS)
     
-    return game_loop(screen, RenderUpdates(TITLE, music_btn, effects_btn, back_btn))
+    buttons = RenderUpdates(TITLE, music_btn, effects_btn, back_btn)
+
+    while True:
+        mouse_up = False
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT: return GameState.QUIT
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 1: mouse_up = True
+        
+        if MENU_BACKGROUND: screen.blit(MENU_BACKGROUND, (0,0))
+        else: screen.fill(BLUE)
+
+        for button in buttons:
+            ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
+
+            if ui_action == "TOGGLE_MUSIC":
+                audio.toggle_music()
+                button.set_text(get_music_text(), 30, WHITE)
+
+                if audio.music_enabled:
+                    audio.play_music(audio_path.menu_music, 0.5)
+
+            elif ui_action == "TOGGLE_SFX":
+                audio.toggle_sfx()
+                button.set_text(get_sfx_text(), 30, WHITE)
+                if audio.sfx_enabled:
+                    audio.play_sfx(audio_path.hit_sound, 0.5)
+
+            elif isinstance(ui_action, GameState):
+                return ui_action
+            
+            button.draw(screen)
+
+        pygame.display.flip()
 
 def game_over_screen(screen):
     tekst_btn = UIElement((CENTER_X, 150), "GAME OVER", 60, RED)
