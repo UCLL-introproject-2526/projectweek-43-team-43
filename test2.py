@@ -40,9 +40,13 @@ def create_blocks():
 def update_blocks(blocks, fall_speed, current_score):
     for block in blocks:
         block[1] += fall_speed
-        if block[1] > SCREEN_SIZE[1]:
+        if fall_speed > 0 and block[1] > SCREEN_SIZE[1]:
             block[2] = random.randint(20, 60)
             block[1] = random.randint(-150, 0)
+            block[0] = random.randint(0, SCREEN_SIZE[0] - block[2])
+        elif fall_speed < 0 and block[1] < -block[2]:
+            block[2] = random.randint(20, 60)
+            block[1] = random.randint(SCREEN_SIZE[1], SCREEN_SIZE[1] + 150)
             block[0] = random.randint(0, SCREEN_SIZE[0] - block[2])
 
     zichtbare_score = current_score // 10
@@ -85,9 +89,12 @@ def show_game_over(surface, final_score):
                 if event.key == pygame.K_SPACE:
                     waiting = False
 
-def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large, player_img):
+def render_frame(surface, blocks, player_x, player_y, current_score, heart_img, current_lives, immunity_timer, background_img, img_small, img_medium, img_large, player_img, portal_rect=None, portal_img=None ):
     surface.fill(BLACK)
     surface.blit(background_img, (0,0))
+
+    if portal_rect and portal_img:
+        surface.blit(portal_img, (portal_rect.x, portal_rect.y))
     
    
     for block in blocks:
@@ -141,6 +148,10 @@ def main():
     heart_image = pygame.image.load("images/lives.png").convert_alpha()
     heart_image = pygame.transform.scale(heart_image, (30, 30))
 
+    portal_img = pygame.image.load("images/portal.png").convert_alpha()
+    portal_img = pygame.transform.scale(portal_img, (200, 40))
+
+
     
     x = SCREEN_SIZE[0] // 2
     y = SCREEN_SIZE[1] - 100
@@ -151,6 +162,10 @@ def main():
     score = 0
     lives = 3
     immunity_timer = 0
+
+    level_flipped = False
+    portal_active = False
+
 
     running = True
     while running:
@@ -186,7 +201,17 @@ def main():
         
         x += x_velocity
         y += y_velocity
-        score += 1 
+        score += 1
+
+        if not level_flipped:
+            fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
+        else:
+            fall_speed = max(fall_speed - SPEED_INCREASE, -MAX_SPEED)
+        
+
+
+
+
         fall_speed = min(fall_speed + SPEED_INCREASE, MAX_SPEED)
         update_blocks(blocks, fall_speed, score)
 
@@ -201,13 +226,62 @@ def main():
             y = SCREEN_SIZE[1] - PLAYER_RADIUS
 
         player_rect = pygame.Rect(x - PLAYER_RADIUS, y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
+
+
+        portal_rect = None
+        if score // 10 >= 100 and not level_flipped:
+            portal_active = True
+            
+            portal_rect = pygame.Rect(SCREEN_SIZE[0]//2 - 100, 20, 200, 40)
+            portal_center = (portal_rect.centerx, portal_rect.centery)
+
+            dist_x = portal_center[0] - x
+            dist_y = portal_center[1] - y
+            
+            x += dist_x * 0.05
+            y += dist_y * 0.05
+
+            if player_rect.colliderect(portal_rect):
+                for i in range(40):
+                   
+                    render_frame(surface, blocks, x, y, score, heart_image, lives, 0, background_image, meteor_small, meteor_medium, meteor_large, player_img, portal_rect, portal_img)
+                    
+                   
+                    x += (portal_center[0] - x) * 0.2
+                    y += (portal_center[1] - y) * 0.2
+                    
+                  
+
+                    current_size = int((PLAYER_RADIUS * 2) * (1 - i/40))
+                    if current_size > 0:
+                        scaled_ship = pygame.transform.scale(player_img, (current_size, current_size))            
+                        ship_rect = scaled_ship.get_rect(center=(int(x), int(y)))           
+                        surface.blit(scaled_ship, ship_rect)
+                    
+                    pygame.display.flip()
+                    clock.tick(60)
+
+                
+                level_flipped = True
+                portal_active = False
+                fall_speed = -fall_speed 
+                x, y = SCREEN_SIZE[0]//2, 100 
+                
+                blocks = [] 
+                for _ in range(BLOCK_COUNT):
+                    size = random.randint(20, 60)
+                    bx = random.randint(0, SCREEN_SIZE[0] - size)                    
+                    by = random.randint(SCREEN_SIZE[1], SCREEN_SIZE[1] + 500)
+                    blocks.append([bx, by, size])
+                    
+                continue 
         
         for block in blocks:
             block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
             
             if player_rect.colliderect(block_rect) and immunity_timer == 0:                
                 lives -= 1
-                render_frame(surface, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large, player_img)
+                render_frame(surface, blocks, x, y, score, heart_image, lives, 1, background_image, meteor_small, meteor_medium, meteor_large, player_img, portal_rect, portal_img )
                 pygame.time.delay(300)
                 immunity_timer = 90
                 
@@ -224,7 +298,7 @@ def main():
                 break 
 
         
-        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large, player_img)
+        render_frame(surface, blocks, x, y, score, heart_image, lives, immunity_timer, background_image, meteor_small, meteor_medium, meteor_large, player_img, portal_rect, portal_img)
 
     pygame.quit()
     sys.exit()
