@@ -27,7 +27,11 @@ PLAYER_RADIUS = 20
 MOVEMENT_SPEED = 5
 =======
 SCREEN_SIZE = (1024, 768)
+<<<<<<< HEAD
+BLOCK_COUNT = 5
+=======
 BLOCK_COUNT = 3
+>>>>>>> 5a9e48cf9416a11a1c9a4acf670b6a75409f083d
 PLAYER_RADIUS = 20
 
 MAX_BLOCKS = 15
@@ -63,6 +67,10 @@ class Controls:
         return new_key in [self.left, self.right, self.up, self.down]
 
 <<<<<<< HEAD
+    extra_planeten = (zichtbare_score // 100) * 2
+    if len(blocks) < BLOCK_COUNT + extra_planeten:
+=======
+<<<<<<< HEAD
 =======
     nieuw_totaal = BLOCK_COUNT + (zichtbare_score // 100) * 1
 
@@ -70,6 +78,7 @@ class Controls:
         nieuw_totaal = MAX_BLOCKS
 
     if len(blocks) < nieuw_totaal:
+>>>>>>> 5a9e48cf9416a11a1c9a4acf670b6a75409f083d
         size = random.randint(20, 60)
         x = random.randint(0, SCREEN_SIZE[0] - size)
         y = random.randint(-150, 0)
