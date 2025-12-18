@@ -664,13 +664,12 @@ class LevelSession:
                 hitbox_margin = int(6 * MIN_SCALE)
                 hitbox = b_rect.inflate(-hitbox_margin, -hitbox_margin)
 
+                
                 if player_rect.colliderect(hitbox) and immunity_timer == 0 and not portal_active:
                     lives -= 1
                     if lives > 0:
                         audio.play_sfx(audio_path.hit_sound, 0.5)
-                        self.render_frame(screen, blocks, x, y, score, lives, 1, portal_rect, portal_active)
-                        pygame.time.delay(300)
-                        immunity_timer = 90
+                        immunity_timer = 90 
                     else:
                         self.game.last_score = score // 10
                         return GameState.GAMEOVER
