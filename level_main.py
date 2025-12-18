@@ -4,8 +4,11 @@ import random
 import sys
 import audio
 import audio_path
+import json
+import os
 from enum import Enum
 from pygame.sprite import Sprite, RenderUpdates
+
 
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 768
@@ -31,6 +34,23 @@ SPEED_INCREASE = 0.0005
 MAX_SPEED = 12
 
 FONT_SCORE = None 
+
+def load_highscore():
+    if not os.path.exists("highscores.json"):
+        return {
+            "level1": {"EASY" : 0, "MEDIUM" : 0, "HARD" : 0},
+            "level2": {"EASY" : 0, "MEDIUM" : 0, "HARD" : 0},
+            "level3": {"EASY" : 0, "MEDIUM" : 0, "HARD" : 0}  
+            }
+    with open("highscores.json", "r") as f:
+        return json.load(f)
+    
+def save_highscore(level, difficulty, score):
+    scores = load_highscore()
+    if score > scores[level][difficulty]:
+        scores[level][difficulty] = score
+        with open("highscores.json", "w") as f:
+            json.dump(scores, f)
 
 class GameState(Enum):
     QUIT = -1
@@ -133,85 +153,95 @@ class LevelSelectScreen:
         self.game = game
         self.font = pygame.font.SysFont("Arial", 40, bold=True)
         self.selected_level = None 
+        self.current_difficulty = None
+        self.show_highscore_step = False
         try:
             self.bg = pygame.image.load("images/galaxy.png").convert()
             self.bg = pygame.transform.scale(self.bg, SCREEN_SIZE)
-        except: self.bg = None
+        except:
+            self.bg = None
 
     def set_difficulty(self, diff):
         if diff == "EASY":
             self.game.active_block_count = 5
-            self.game.active_start_speed = 2
-            self.game.active_speed_increase = 0.0003
-            self.game.active_max_blocks = 10
+            self.game.active_start_speed = 3
         elif diff == "MEDIUM":
             self.game.active_block_count = 10
-            self.game.active_start_speed = 4
-            self.game.active_speed_increase = 0.0006
-            self.game.active_max_blocks = 15
+            self.game.active_start_speed = 5
         elif diff == "HARD":
             self.game.active_block_count = 15
-            self.game.active_start_speed = 6
-            self.game.active_speed_increase = 0.001
-            self.game.active_max_blocks = 25
+            self.game.active_start_speed = 7
 
     def run(self, screen):
         self.selected_level = None 
+        self.show_highscore_step = False
+        self.current_difficulty = None
+
         while True:
             if self.bg: screen.blit(self.bg, (0, 0))
             else: screen.fill(BLACK)
             
             mouse_pos = pygame.mouse.get_pos()
             
+            btn_lvl1 = pygame.Rect(SCREEN_WIDTH//2 - 200, 200, 400, 70)
+            btn_lvl2 = pygame.Rect(SCREEN_WIDTH//2 - 200, 300, 400, 70)
+            btn_lvl3 = pygame.Rect(SCREEN_WIDTH//2 - 200, 400, 400, 70)
+            
+            btn_easy = pygame.Rect(SCREEN_WIDTH//2 - 150, 250, 300, 60)
+            btn_med = pygame.Rect(SCREEN_WIDTH//2 - 150, 350, 300, 60)
+            btn_hard = pygame.Rect(SCREEN_WIDTH//2 - 150, 450, 300, 60)
+
             if self.selected_level is None:
                 title = self.font.render("KIES EEN LEVEL", True, WHITE)
-                screen.blit(title, (CENTER_X - title.get_width()//2, 150))
-                
-                btn_lvl1 = pygame.Rect(SCREEN_WIDTH//2 - 200, 250, 400, 80)
-                btn_lvl2 = pygame.Rect(SCREEN_WIDTH//2 - 200, 350, 400, 80)
-                btn_lvl3 = pygame.Rect(SCREEN_WIDTH//2 - 200, 450, 400, 80)
-                
-                pygame.draw.rect(screen, BLUE if btn_lvl1.collidepoint(mouse_pos) else DARK_GRAY, btn_lvl1, border_radius=10)
-                pygame.draw.rect(screen, GREEN if btn_lvl2.collidepoint(mouse_pos) else DARK_GRAY, btn_lvl2, border_radius=10)
-                pygame.draw.rect(screen, RED if btn_lvl3.collidepoint(mouse_pos) else DARK_GRAY, btn_lvl3, border_radius=10)
-                
-                t1 = self.font.render("Level 1", True, WHITE)
-                t2 = self.font.render("Level 2", True, WHITE)
-                t3 = self.font.render("Level 3", True, WHITE)
-                screen.blit(t1, (btn_lvl1.centerx - t1.get_width()//2, btn_lvl1.centery - t1.get_height()//2))
-                screen.blit(t2, (btn_lvl2.centerx - t2.get_width()//2, btn_lvl2.centery - t2.get_height()//2))
-                screen.blit(t3, (btn_lvl3.centerx - t3.get_width()//2, btn_lvl3.centery - t3.get_height()//2))
-            else:
-                title = self.font.render("KIES MOEILIJKHEIDSGRAAD", True, WHITE)
-                screen.blit(title, (CENTER_X - title.get_width()//2, 150))
+                screen.blit(title, (CENTER_X - title.get_width()//2, 100))
+                for btn, txt in [(btn_lvl1, "Level1"), (btn_lvl2, "Level2"), (btn_lvl3, "Level3")]:
+                    color = BLUE if btn.collidepoint(mouse_pos) else DARK_GRAY
+                    pygame.draw.rect(screen, color, btn, border_radius=15)
+                    t = self.font.render(txt, True, WHITE)
+                    screen.blit(t, (btn.centerx - t.get_width()//2, btn.centery - t.get_height()//2))
 
-                btn_easy = pygame.Rect(SCREEN_WIDTH//2 - 150, 250, 300, 70)
-                btn_med = pygame.Rect(SCREEN_WIDTH//2 - 150, 350, 300, 70)
-                btn_hard = pygame.Rect(SCREEN_WIDTH//2 - 150, 450, 300, 70)
-
+            elif not self.show_highscore_step:
+                title = self.font.render("KIES MOEILIJKHEID", True, WHITE)
+                screen.blit(title, (CENTER_X - title.get_width()//2, 100))
                 for btn, txt, color in [(btn_easy, "EASY", GREEN), (btn_med, "MEDIUM", YELLOW), (btn_hard, "HARD", RED)]:
-                    c = color if btn.collidepoint(mouse_pos) else GRAY
-                    pygame.draw.rect(screen, c, btn, border_radius=10)
+                    bg_color = color if btn.collidepoint(mouse_pos) else GRAY
+                    pygame.draw.rect(screen, bg_color, btn, border_radius=10)
                     t = self.font.render(txt, True, BLACK)
                     screen.blit(t, (btn.centerx - t.get_width()//2, btn.centery - t.get_height()//2))
+
+            else:
+                current_scores = load_highscore()
+                if self.selected_level == GameState.PLAYING_LVL1: lvl_str = "level1"
+                elif self.selected_level == GameState.PLAYING_LVL2: lvl_str = "level2"
+                else: 
+                    lvl_str = "level3"
+                
+                score = current_scores[lvl_str][self.current_difficulty]
+                
+                screen.blit(self.font.render(f"HIGHSCORE: {score}", True, YELLOW), (CENTER_X - 150, 250))
+                screen.blit(self.font.render(f"{lvl_str.upper()} - {self.current_difficulty}", True, WHITE), (CENTER_X - 150, 320))
+                screen.blit(self.font.render("Klik om te starten!", True, GREEN), (CENTER_X - 150, 450))
 
             pygame.display.flip()
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT: return GameState.QUIT
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE: 
-                    if self.selected_level: self.selected_level = None
-                    else: return GameState.TITLE
-                
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if self.selected_level is None:
                         if btn_lvl1.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL1
-                        if btn_lvl2.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL2
-                        if btn_lvl3.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL3
-                    else:
-                        if btn_easy.collidepoint(event.pos): self.set_difficulty("EASY"); return self.selected_level
-                        if btn_med.collidepoint(event.pos): self.set_difficulty("MEDIUM"); return self.selected_level
-                        if btn_hard.collidepoint(event.pos): self.set_difficulty("HARD"); return self.selected_level
+                        elif btn_lvl2.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL2
+                        elif btn_lvl3.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL3
+                    
+                    elif not self.show_highscore_step:
+                        if btn_easy.collidepoint(event.pos): 
+                            self.set_difficulty("EASY"); self.current_difficulty = "EASY"; self.show_highscore_step = True
+                        elif btn_med.collidepoint(event.pos): 
+                            self.set_difficulty("MEDIUM"); self.current_difficulty = "MEDIUM"; self.show_highscore_step = True
+                        elif btn_hard.collidepoint(event.pos): 
+                            self.set_difficulty("HARD"); self.current_difficulty = "HARD"; self.show_highscore_step = True
+                    
+                    elif self.show_highscore_step:
+                        return self.selected_level
 
 class TitleScreen(MenuScreenBase):
     def build_buttons(self):
@@ -836,26 +866,47 @@ class Game:
             if game_state == GameState.TITLE:
                 audio.play_music(audio_path.menu_music, 0.5)
                 game_state = self.title_screen.run(self.screen)
+
             elif game_state == GameState.LEVEL_SELECT:
                 game_state = self.level_select_screen.run(self.screen)
+
             elif game_state == GameState.PLAYING_LVL1:
                 self.current_playing_level = GameState.PLAYING_LVL1
                 game_state = LevelSession(self).run(self.screen)
+
             elif game_state == GameState.PLAYING_LVL2:
                 self.current_playing_level = GameState.PLAYING_LVL2
                 game_state = LevelSession2(self).run(self.screen)
+
             elif game_state == GameState.PLAYING_LVL3:
                 self.current_playing_level = GameState.PLAYING_LVL3
                 game_state = LevelSession3(self).run(self.screen)
+
             elif game_state == GameState.GAMEOVER:
+                if self.current_playing_level == GameState.PLAYING_LVL1:
+                    lvl_key = "level1"
+                elif self.current_playing_level == GameState.PLAYING_LVL2:
+                    lvl_key = "level2"
+                else:
+                    lvl_key = "level3"
+                
+                diff_key = self.level_select_screen.current_difficulty
+                if diff_key: 
+                    save_highscore(lvl_key, diff_key, self.last_score)
+                
                 audio.play_music(audio_path.gameover_music, 0.5, loop=0)
                 game_state = self.game_over_screen.run(self.screen)
+
+
             elif game_state == GameState.OPTIONS:
                 game_state = self.options_screen.run(self.screen)
+
             elif game_state == GameState.CONTROLS:
                 game_state = self.controls_screen.run(self.screen)
+
             elif game_state == GameState.SOUND:
                 game_state = self.sound_screen.run(self.screen)
+
             elif game_state == GameState.QUIT:
                 pygame.quit()
                 sys.exit()
