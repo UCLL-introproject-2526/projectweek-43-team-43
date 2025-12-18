@@ -39,7 +39,8 @@ def load_highscore():
     if not os.path.exists("highscores.json"):
         return {
             "level1": {"EASY" : 0, "MEDIUM" : 0, "HARD" : 0},
-            "level2": {"EASY" : 0, "MEDIUM" : 0, "HARD" : 0}  
+            "level2": {"EASY" : 0, "MEDIUM" : 0, "HARD" : 0},
+            "level3": {"EASY" : 0, "MEDIUM" : 0, "HARD" : 0}  
             }
     with open("highscores.json", "r") as f:
         return json.load(f)
@@ -56,12 +57,13 @@ class GameState(Enum):
     TITLE = 0
     PLAYING_LVL1 = 1
     PLAYING_LVL2 = 2
-    OPTIONS = 3
+    PLAYING_LVL3 = 3
     VIDEO_SETTINGS = 4
     SOUND = 5
     CONTROLS = 6
     LEVEL_SELECT = 7
     GAMEOVER = 8
+    OPTIONS = 9
 
 class Controls:
     def __init__(self):
@@ -156,92 +158,80 @@ class LevelSelectScreen:
         try:
             self.bg = pygame.image.load("images/galaxy.png").convert()
             self.bg = pygame.transform.scale(self.bg, SCREEN_SIZE)
-        except: self.bg = None
+        except:
+            self.bg = None
 
     def set_difficulty(self, diff):
         if diff == "EASY":
             self.game.active_block_count = 5
-            self.game.active_start_speed = 2
-            self.game.active_speed_increase = 0.0005
-            self.game.active_max_blocks = 17
+            self.game.active_start_speed = 3
         elif diff == "MEDIUM":
             self.game.active_block_count = 10
-            self.game.active_start_speed = 4
-            self.game.active_speed_increase = 0.0008
-            self.game.active_max_blocks = 20
+            self.game.active_start_speed = 5
         elif diff == "HARD":
             self.game.active_block_count = 15
-            self.game.active_start_speed = 6
-            self.game.active_speed_increase = 0.002
-            self.game.active_max_blocks = 30
+            self.game.active_start_speed = 7
 
     def run(self, screen):
-        self.selected_level = None
+        self.selected_level = None 
         self.show_highscore_step = False
-        self.current_difficulty = None 
+        self.current_difficulty = None
+
         while True:
             if self.bg: screen.blit(self.bg, (0, 0))
             else: screen.fill(BLACK)
             
             mouse_pos = pygame.mouse.get_pos()
             
+            btn_lvl1 = pygame.Rect(SCREEN_WIDTH//2 - 200, 200, 400, 70)
+            btn_lvl2 = pygame.Rect(SCREEN_WIDTH//2 - 200, 300, 400, 70)
+            btn_lvl3 = pygame.Rect(SCREEN_WIDTH//2 - 200, 400, 400, 70)
+            
+            btn_easy = pygame.Rect(SCREEN_WIDTH//2 - 150, 250, 300, 60)
+            btn_med = pygame.Rect(SCREEN_WIDTH//2 - 150, 350, 300, 60)
+            btn_hard = pygame.Rect(SCREEN_WIDTH//2 - 150, 450, 300, 60)
+
             if self.selected_level is None:
                 title = self.font.render("KIES EEN LEVEL", True, WHITE)
-                screen.blit(title, (CENTER_X - title.get_width()//2, 150))
-                
-                btn_lvl1 = pygame.Rect(SCREEN_WIDTH//2 - 200, 300, 400, 80)
-                btn_lvl2 = pygame.Rect(SCREEN_WIDTH//2 - 200, 450, 400, 80)
-                
-                pygame.draw.rect(screen, BLUE if btn_lvl1.collidepoint(mouse_pos) else DARK_GRAY, btn_lvl1, border_radius=10)
-                pygame.draw.rect(screen, BLUE if btn_lvl2.collidepoint(mouse_pos) else DARK_GRAY, btn_lvl2, border_radius=10)
-                
-                t1 = self.font.render("level1", True, WHITE)
-                t2 = self.font.render("level2", True, WHITE)
-                screen.blit(t1, (btn_lvl1.centerx - t1.get_width()//2, btn_lvl1.centery - t1.get_height()//2))
-                screen.blit(t2, (btn_lvl2.centerx - t2.get_width()//2, btn_lvl2.centery - t2.get_height()//2))
-           
-           
+                screen.blit(title, (CENTER_X - title.get_width()//2, 100))
+                for btn, txt in [(btn_lvl1, "Level1"), (btn_lvl2, "Level2"), (btn_lvl3, "Level3")]:
+                    color = BLUE if btn.collidepoint(mouse_pos) else DARK_GRAY
+                    pygame.draw.rect(screen, color, btn, border_radius=15)
+                    t = self.font.render(txt, True, WHITE)
+                    screen.blit(t, (btn.centerx - t.get_width()//2, btn.centery - t.get_height()//2))
+
             elif not self.show_highscore_step:
                 title = self.font.render("KIES MOEILIJKHEID", True, WHITE)
-                screen.blit(title, (CENTER_X - title.get_width()//2, 150))
-
-                btn_easy = pygame.Rect(SCREEN_WIDTH//2 - 150, 250, 300, 70)
-                btn_med = pygame.Rect(SCREEN_WIDTH//2 - 150, 350, 300, 70)
-                btn_hard = pygame.Rect(SCREEN_WIDTH//2 - 150, 450, 300, 70)
-
+                screen.blit(title, (CENTER_X - title.get_width()//2, 100))
                 for btn, txt, color in [(btn_easy, "EASY", GREEN), (btn_med, "MEDIUM", YELLOW), (btn_hard, "HARD", RED)]:
-                    c = color if btn.collidepoint(mouse_pos) else GRAY
-                    pygame.draw.rect(screen, c, btn, border_radius=10)
+                    bg_color = color if btn.collidepoint(mouse_pos) else GRAY
+                    pygame.draw.rect(screen, bg_color, btn, border_radius=10)
                     t = self.font.render(txt, True, BLACK)
                     screen.blit(t, (btn.centerx - t.get_width()//2, btn.centery - t.get_height()//2))
+
             else:
-                current_highscores = load_highscore()
-                lvl_str = "level1" if self.selected_level == GameState.PLAYING_LVL1 else "level2"
-                score = current_highscores[lvl_str][self.current_difficulty]
+                current_scores = load_highscore()
+                if self.selected_level == GameState.PLAYING_LVL1: lvl_str = "level1"
+                elif self.selected_level == GameState.PLAYING_LVL2: lvl_str = "level2"
+                else: 
+                    lvl_str = "level3"
                 
-                txt_hs = self.font.render(f"HIGHSCORE: {score}", True, YELLOW)
-                txt_info = self.font.render(f"{lvl_str} ({self.current_difficulty})", True, WHITE)
-                txt_start = self.font.render("Klik om te beginnen!", True, GREEN)
+                score = current_scores[lvl_str][self.current_difficulty]
                 
-                screen.blit(txt_hs, (CENTER_X - txt_hs.get_width()//2, 250))
-                screen.blit(txt_info, (CENTER_X - txt_info.get_width()//2, 320))
-                screen.blit(txt_start, (CENTER_X - txt_start.get_width()//2, 450))        
+                screen.blit(self.font.render(f"HIGHSCORE: {score}", True, YELLOW), (CENTER_X - 150, 250))
+                screen.blit(self.font.render(f"{lvl_str.upper()} - {self.current_difficulty}", True, WHITE), (CENTER_X - 150, 320))
+                screen.blit(self.font.render("Klik om te starten!", True, GREEN), (CENTER_X - 150, 450))
 
             pygame.display.flip()
 
             for event in pygame.event.get():
-                if event.type == pygame.QUIT: 
-                    return GameState.QUIT
-                
-                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE: 
-                    if self.show_highscore_step: self.show_highscore_step = False 
-                    elif self.selected_level: self.selected_level = None      
-                    else: return GameState.TITLE          
-                
+                if event.type == pygame.QUIT: return GameState.QUIT
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if self.selected_level is None:
                         if btn_lvl1.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL1
                         elif btn_lvl2.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL2
+                        elif btn_lvl3.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL3
+                    
                     elif not self.show_highscore_step:
                         if btn_easy.collidepoint(event.pos): 
                             self.set_difficulty("EASY"); self.current_difficulty = "EASY"; self.show_highscore_step = True
@@ -249,7 +239,8 @@ class LevelSelectScreen:
                             self.set_difficulty("MEDIUM"); self.current_difficulty = "MEDIUM"; self.show_highscore_step = True
                         elif btn_hard.collidepoint(event.pos): 
                             self.set_difficulty("HARD"); self.current_difficulty = "HARD"; self.show_highscore_step = True
-                    else:
+                    
+                    elif self.show_highscore_step:
                         return self.selected_level
 
 class TitleScreen(MenuScreenBase):
@@ -682,6 +673,145 @@ class LevelSession2:
                         break
             self.render_frame(screen, blocks, x, y, score, lives, immunity, current_portal_rect)
 
+class LevelSession3:
+    def __init__(self, game):
+        self.game = game
+        self.load_assets()
+        self.bg_scroll = 0
+        self.bg_speed = 1
+        self.current_bg_index = 0
+
+    def load_assets(self):
+        try:
+            self.player_img = pygame.image.load("images/spaceshipp.png").convert_alpha()
+            self.player_img = pygame.transform.scale(self.player_img, (PLAYER_RADIUS * 2, PLAYER_RADIUS * 2))
+            self.background_image = pygame.image.load("images/galaxy.png").convert()
+            self.background_image = pygame.transform.scale(self.background_image, SCREEN_SIZE)
+            self.meteor_small = pygame.image.load("images/neptunus.png").convert_alpha()
+            self.meteor_medium = pygame.image.load("images/mars.png").convert_alpha()
+            self.meteor_large = pygame.image.load("images/jupiter.png").convert_alpha()
+            self.heart_image = pygame.image.load("images/lives.png").convert_alpha()
+            self.heart_image = pygame.transform.scale(self.heart_image, (30, 30))
+        except Exception as e:
+            print(f"Error assets L1: {e}")
+
+        self.bg_images = []
+        for i in range(1, 5):
+            try:
+                img = pygame.image.load(f"images/bgob{i}.png").convert()
+                img = pygame.transform.scale(img, SCREEN_SIZE)
+                self.bg_images.append(img)
+            except:
+                print(f"Kon afbeelding images/bgob{i}.png niet laden")
+
+    def create_blocks(self):
+        blocks = []
+        for _ in range(self.game.active_block_count):
+            size = random.randint(20, 60)
+            richting = random.choice([0, 1])
+            
+            if richting == 0:
+                bx = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + 500)
+            else:
+                bx = random.randint(-500, -size)
+                
+            by = random.randint(0, SCREEN_HEIGHT - size)
+            blocks.append([bx, by, size, richting])
+        return blocks
+
+    def update_blocks(self, blocks, fall_speed, current_score):
+        for block in blocks:
+
+            if block[3] == 0:
+                block[0] -= fall_speed  
+                if block[0] < -block[2]:
+                    block[0] = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + 150)
+                    block[1] = random.randint(0, SCREEN_HEIGHT - block[2])
+                    block[2] = random.randint(20, 60)
+            else:
+                block[0] += fall_speed 
+                if block[0] > SCREEN_WIDTH:
+                    block[0] = random.randint(-150, -block[2])
+                    block[1] = random.randint(0, SCREEN_HEIGHT - block[2])
+                    block[2] = random.randint(20, 60)
+
+        zichtbare_score = current_score // 10
+        max_b = min(self.game.active_block_count + (zichtbare_score // 50), self.game.active_max_blocks)
+        if len(blocks) < max_b:
+            size = random.randint(20, 60)
+            richting = random.choice([0, 1])
+            if richting == 0:
+                blocks.append([random.randint(SCREEN_WIDTH, SCREEN_WIDTH + 150), random.randint(0, SCREEN_HEIGHT - size), size, 0])
+            else:
+                blocks.append([random.randint(-150, -size), random.randint(0, SCREEN_HEIGHT - size), size, 1])
+
+    def render_frame(self, surface, blocks, player_x, player_y, current_score, current_lives, immunity_timer):
+        surface.blit(self.background_image, (0, 0))
+        if self.bg_images:
+            self.bg_scroll += self.bg_speed
+        if self.bg_scroll >= SCREEN_HEIGHT:
+            self.bg_scroll = 0
+            self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        next_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        surface.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
+        surface.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
+
+        for block in blocks:
+            x_pos, y_pos, size = block[0], block[1], block[2]
+            img = self.meteor_small if size < 40 else (self.meteor_medium if size < 50 else self.meteor_large)
+            scaled = pygame.transform.scale(img, (size, size))
+            surface.blit(scaled, (x_pos, y_pos))
+        if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
+            img_rect = self.player_img.get_rect(center=(int(player_x), int(player_y)))
+            surface.blit(self.player_img, img_rect)    
+        score_surface = FONT_SCORE.render("Score: " + str(current_score // 10), True, WHITE)
+        surface.blit(score_surface, (SCREEN_WIDTH - 180, 20))
+        for i in range(current_lives):
+            surface.blit(self.heart_image, (20 + (i * 35), 20))
+        pygame.display.flip()
+
+    def run(self, screen) -> GameState:
+        audio.play_music(audio_path.gameplay_music, 0.4)
+        c = self.game.controls
+        x, y = SCREEN_WIDTH // 2, SCREEN_HEIGHT - 100
+        x_velocity, y_velocity = 0, 0
+        blocks = self.create_blocks()
+        score, lives, immunity_timer = 0, 3, 0
+        clock = pygame.time.Clock()
+        while True:
+            clock.tick(60)
+            if immunity_timer > 0: immunity_timer -= 1
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT: return GameState.QUIT
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE: return GameState.TITLE
+                    if event.key == c.right: x_velocity = MOVEMENT_SPEED
+                    if event.key == c.left: x_velocity = -MOVEMENT_SPEED
+                    if event.key == c.up: y_velocity = -MOVEMENT_SPEED
+                    if event.key == c.down: y_velocity = MOVEMENT_SPEED
+                if event.type == pygame.KEYUP:
+                    if event.key in [c.right, c.left]: x_velocity = 0
+                    if event.key in [c.up, c.down]: y_velocity = 0
+            x += x_velocity
+            y += y_velocity
+            score += 1
+            fall_speed = min(self.game.active_start_speed + (score * self.game.active_speed_increase), MAX_SPEED)
+            self.update_blocks(blocks, fall_speed, score)
+            x = max(PLAYER_RADIUS, min(SCREEN_WIDTH - PLAYER_RADIUS, x))
+            y = max(PLAYER_RADIUS, min(SCREEN_HEIGHT - PLAYER_RADIUS, y))
+            player_rect = pygame.Rect(x - PLAYER_RADIUS, y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
+            for block in blocks:
+                block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
+                if player_rect.colliderect(block_rect) and immunity_timer == 0:                
+                    lives -= 1
+                    audio.play_sfx(audio_path.hit_sound, 0.5)
+                    if lives <= 0:
+                        self.game.last_score = score // 10
+                        return GameState.GAMEOVER
+                    immunity_timer = 90
+                    break 
+            self.render_frame(screen, blocks, x, y, score, lives, immunity_timer)
+
 class Game:
     def __init__(self):
         pygame.init()
@@ -748,10 +878,21 @@ class Game:
                 self.current_playing_level = GameState.PLAYING_LVL2
                 game_state = LevelSession2(self).run(self.screen)
 
+            elif game_state == GameState.PLAYING_LVL3:
+                self.current_playing_level = GameState.PLAYING_LVL3
+                game_state = LevelSession3(self).run(self.screen)
+
             elif game_state == GameState.GAMEOVER:
-                lvl_key = "level1" if self.current_playing_level == GameState.PLAYING_LVL1 else "level2"
+                if self.current_playing_level == GameState.PLAYING_LVL1:
+                    lvl_key = "level1"
+                elif self.current_playing_level == GameState.PLAYING_LVL2:
+                    lvl_key = "level2"
+                else:
+                    lvl_key = "level3"
+                
                 diff_key = self.level_select_screen.current_difficulty
-                save_highscore(lvl_key, diff_key, self.last_score)
+                if diff_key: 
+                    save_highscore(lvl_key, diff_key, self.last_score)
                 
                 audio.play_music(audio_path.gameover_music, 0.5, loop=0)
                 game_state = self.game_over_screen.run(self.screen)

@@ -397,6 +397,10 @@ class LevelSession:
         self.split_child_spread = 3.8 * MIN_SCALE
         self.split_max_extra = 8
 
+        self.bg_scroll = 0
+        self.bg_speed = 1
+        self.current_bg_index = 0
+
     def load_assets(self):
         try:
             self.player_image = pygame.image.load(f"images/{self.game.current_skin}").convert_alpha()
@@ -404,11 +408,14 @@ class LevelSession:
         except:
             self.player_image = None
 
-        try:
-            self.background_image = pygame.image.load("images/galaxy.png").convert()
-            self.background_image = pygame.transform.scale(self.background_image, SCREEN_SIZE)
-        except:
-            self.background_image = None
+        self.bg_images = []
+        for i in range(1, 5):
+            try:
+                img = pygame.image.load(f"images/bgob{i}.png").convert()
+                img = pygame.transform.scale(img, SCREEN_SIZE)
+                self.bg_images.append(img)
+            except:
+                print(f"Kon afbeelding images/bgob{i}.png niet laden")
 
         try:
             self.meteor_small = pygame.image.load("images/neptunus.png").convert_alpha()
@@ -543,8 +550,17 @@ class LevelSession:
 
     def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active):
         surface.fill(BLACK)
-        if self.background_image:
-            surface.blit(self.background_image, (0, 0))
+        if self.bg_images:
+            self.bg_scroll += self.bg_speed
+        
+        if self.bg_scroll >= SCREEN_HEIGHT:
+            self.bg_scroll = 0
+            self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        
+        next_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        
+        surface.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
+        surface.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
 
         if portal_rect and self.portal_image:
             surface.blit(self.portal_image, portal_rect)
@@ -746,18 +762,22 @@ class LevelSession:
                     continue
 
             for block in blocks:
-                b_rect = pygame.Rect(int(block["x"]), int(block["y"]), block["size"], block["size"])
-                hitbox_margin = int(6 * MIN_SCALE)
-                hitbox = b_rect.inflate(-hitbox_margin, -hitbox_margin)
+                planet_radius = block["size"] / 2
+                hitbox_radius = planet_radius - (6 * MIN_SCALE) 
+                
+                planet_center_x = block["x"] + planet_radius
+                planet_center_y = block["y"] + planet_radius
 
-                if player_rect.colliderect(hitbox) and immunity_timer == 0 and not portal_active:
+                distance = math.hypot(x - planet_center_x, y - planet_center_y)
+
+                if distance < (self.player_radius + hitbox_radius) and immunity_timer == 0 and not portal_active:
                     lives -= 1
                     if lives > 0:
                         audio.play_sfx(audio_path.hit_sound, 0.5)
-                        # De extra render_frame mag ook weg, de loop pakt dit vanzelf op
                         immunity_timer = 90 
                     else:
                         self.game.last_score = score // 10
+                        pygame.mouse.set_visible(True)
                         return GameState.GAMEOVER
                     break
 
