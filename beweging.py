@@ -79,33 +79,25 @@ class UIElement(Sprite):
         self.action = action
         self.font_size = font_size
         self.text_rgb = text_rgb
-        self.action = action
-        self.mouse_over = False
-        self.refresh_scaling()
-
-    def refresh_scaling(self):
-        new_x = self.ratio_position[0] * SCREEN_WIDTH
-        new_y = self.ratio_position[1] * SCREEN_HEIGHT
-
-        default_image = TextFactory.create_surface_with_text(self.text, int(self.font_size * 1.2), self.text_rgb)
-        highlighted_image = TextFactory.create_surface_with_text(self.text, int(self.font_size * 1.2), self.text_rgb)
 
         default_image = TextFactory.create_surface_with_text(text, font_size, text_rgb)
+        highlighted_image = TextFactory.create_surface_with_text(text, int(font_size * 1.2), text_rgb)
 
-        self.images = [
-            TextFactory.create_surface_with_text(self.text, self.font_size, self.text_rgb),
-            TextFactory.create_surface_with_text(self.text, int(self.font_size * 1.2), self.text_rgb)
-        ]
+        self.images = [default_image, highlighted_image]
         self.rects = [
-            self.images[0].get_rect(center=(new_x, new_y)),
-            self.images[1].get_rect(center=(new_x, new_y)),
+            default_image.get_rect(center=center_position),
+            highlighted_image.get_rect(center=center_position),
         ]
 
-    def set_text(self, text, font_size=None, text_rgb=None):
-        self.text = text
-        if font_size: self.font_size = font_size
-        if text_rgb: self.text_rgb = text_rgb
-        self.refresh_scaling()
+    def set_text(self, text, font_size, text_rgb):
+        default_image = TextFactory.create_surface_with_text(text, font_size, text_rgb)
+        highlighted_image = TextFactory.create_surface_with_text(text, int(font_size * 1.2), text_rgb)
+        self.images = [default_image, highlighted_image]
+        current_center = self.rects[0].center
+        self.rects = [
+            default_image.get_rect(center=current_center),
+            highlighted_image.get_rect(center=current_center),
+        ]
 
     @property
     def image(self):
@@ -191,7 +183,6 @@ class ControlsScreen:
         btn_down = UIElement((CENTER_X, 400 * SCALE_H), f"move down: {pygame.key.name(c.down).upper()}", 25, WHITE, "CHANGE_DOWN")
         btn_up = UIElement((CENTER_X, 500 * SCALE_H), f"move up: {pygame.key.name(c.up).upper()}", 25, WHITE, "CHANGE_UP")
         back_btn = UIElement((CENTER_X, 600 * SCALE_H), "Back to Options", 30, WHITE, GameState.OPTIONS)
-
         buttons = RenderUpdates(title, btn_left, btn_right, btn_down, btn_up, back_btn)
 
         while True:
@@ -199,12 +190,6 @@ class ControlsScreen:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return GameState.QUIT
-                if event.type == pygame.VIDEORESIZE:
-                    self.game.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
-                    recalc_display_metrics(self.game.screen)
-                    self.game._load_menu_background()
-                    for btn in buttons:
-                        btn.refresh_scaling()
                 if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     mouse_up = True
 
@@ -212,16 +197,13 @@ class ControlsScreen:
 
             for button in buttons:
                 ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
-                
                 if ui_action is not None:
                     if isinstance(ui_action, GameState):
                         return ui_action
 
                     button.set_text("PRESS KEY...", 25, YELLOW)
-                   
-                    buttons.draw(screen) 
+                    button.draw(screen)
                     pygame.display.flip()
-        
                     new = self.wait_for_key()
 
                     if not c.key_is_taken(new):
@@ -383,6 +365,10 @@ class LevelSession:
         self.split_child_spread = 3.8 * MIN_SCALE
         self.split_max_extra = 8
 
+        self.bg_scroll = 0
+        self.bg_speed = 2
+        self.current_bg_index = 0
+
     def load_assets(self):
         try:
             self.player_image = pygame.image.load(f"images/{self.game.current_skin}").convert_alpha()
@@ -390,11 +376,14 @@ class LevelSession:
         except:
             self.player_image = None
 
-        try:
-            self.background_image = pygame.image.load("images/galaxy.png").convert()
-            self.background_image = pygame.transform.scale(self.background_image, SCREEN_SIZE)
-        except:
-            self.background_image = None
+        self.bg_images = []
+        for i in range(1, 5):
+            try:
+                img = pygame.image.load(f"images/bgob{i}.png").convert()
+                img = pygame.transform.scale(img, SCREEN_SIZE)
+                self.bg_images.append(img)
+            except Exception as e:
+                print(f"Kon afbeelding images/bgob{i}.png niet laden: {e}")
 
         try:
             self.meteor_small = pygame.image.load("images/neptunus.png").convert_alpha()
@@ -437,32 +426,16 @@ class LevelSession:
 
         is_splitter = (random.random() < self.splitter_chance)
         drift_strength = 1.2 * MIN_SCALE
-        
-        block_img = None
-        if self.meteor_small and self.meteor_medium and self.meteor_large:
-            boundary_small = 40 * MIN_SCALE
-            boundary_medium = 50 * MIN_SCALE
-            
-            if size < boundary_small:
-                base_img = self.meteor_small
-            elif size < boundary_medium:
-                base_img = self.meteor_medium
-            else:
-                base_img = self.meteor_large
-            
-            block_img = pygame.transform.scale(base_img, (size, size))
-       
-
         return {
             "x": float(x),
             "y": float(y),
             "size": size,
-            "image": block_img,  
             "splitter": is_splitter,
             "split_done": False,
             "vx": random.uniform(-drift_strength, drift_strength),
             "vy": random.uniform(-0.5 * MIN_SCALE, 0.5 * MIN_SCALE),
         }
+
     def create_blocks(self, level_mode="down"):
         return [self.make_block(level_mode) for _ in range(self.block_count)]
 
@@ -524,8 +497,17 @@ class LevelSession:
 
     def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active):
         surface.fill(BLACK)
-        if self.background_image:
-            surface.blit(self.background_image, (0, 0))
+        if self.bg_images:
+            self.bg_scroll += self.bg_speed
+        
+        if self.bg_scroll >= SCREEN_HEIGHT:
+            self.bg_scroll = 0
+            self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        
+        next_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        
+        surface.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
+        surface.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
 
         if portal_rect and self.portal_image:
             surface.blit(self.portal_image, portal_rect)
@@ -535,28 +517,17 @@ class LevelSession:
             bx = int(b["x"])
             by = int(b["y"])
 
-            if b.get("image") is None:
-                if self.meteor_small and self.meteor_medium and self.meteor_large:
-                    # Kies de juiste meteor op basis van grootte
-                    if size < 40 * MIN_SCALE: base_img = self.meteor_small
-                    elif size < 55 * MIN_SCALE: base_img = self.meteor_medium
-                    else: base_img = self.meteor_large
-                    b["image"] = pygame.transform.scale(base_img, (size, size))
-            
-            # Teken de meteor (als de afbeelding gelukt is)
-            if b.get("image"):
-                surface.blit(b["image"], (bx, by))
-            else:
-                pygame.draw.rect(surface, WHITE, (bx, by, size, size))
-                
-                if b.get("image"):
-                    surface.blit(b["image"], (bx, by))
-                
-                else:
-                    b["image"] = None
+            if self.meteor_small and self.meteor_medium and self.meteor_large:
+                boundary_small = 40 * MIN_SCALE
+                boundary_medium = 50 * MIN_SCALE
 
-            if b.get("image"):
-                surface.blit(b["image"], (bx, by))
+                if size < boundary_small:
+                    img = self.meteor_small
+                elif size < boundary_medium:
+                    img = self.meteor_medium
+                else:
+                    img = self.meteor_large
+                surface.blit(pygame.transform.scale(img, (size, size)), (bx, by))
             else:
                 pygame.draw.rect(surface, WHITE, (bx, by, size, size))
 
@@ -709,12 +680,13 @@ class LevelSession:
                 hitbox_margin = int(6 * MIN_SCALE)
                 hitbox = b_rect.inflate(-hitbox_margin, -hitbox_margin)
 
-                
                 if player_rect.colliderect(hitbox) and immunity_timer == 0 and not portal_active:
                     lives -= 1
                     if lives > 0:
                         audio.play_sfx(audio_path.hit_sound, 0.5)
-                        immunity_timer = 90 
+                        self.render_frame(screen, blocks, x, y, score, lives, 1, portal_rect, portal_active)
+                        pygame.time.delay(300)
+                        immunity_timer = 90
                     else:
                         self.game.last_score = score // 10
                         return GameState.GAMEOVER
@@ -809,15 +781,6 @@ class Game:
             elif game_state == GameState.QUIT:
                 pygame.quit()
                 sys.exit()
-
-    def wait_for_key(self):
-        while True:
-            for event in pygame.event.get():
-                if event.type == pygame.KEYDOWN:
-                    return event.key
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
 
 def main():
     Game().run()
