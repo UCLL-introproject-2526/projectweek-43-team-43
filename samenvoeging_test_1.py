@@ -103,8 +103,14 @@ class UIElement(Sprite):
         ]  
 
     def set_text(self, text, font_size, text_rgb):
+        self.text = text
+        self.font_size = font_size
+        self.text_rgb = text_rgb
         default_image = TextFactory.create_surface_with_text(text, font_size, text_rgb)
-        highlighted_image = TextFactory.create_surface_with_text(text, int(font_size * 1.2), text_rgb)
+        if self.action is None:
+            highlighted_image = default_image
+        else:
+            highlighted_image = TextFactory.create_surface_with_text(text, int(font_size * 1.2), text_rgb)
         self.images = [default_image, highlighted_image]
         current_center = self.rects[0].center
         self.rects = [
@@ -142,8 +148,9 @@ class MenuScreenBase:
         raise NotImplementedError
 
     def run(self, screen) -> GameState:
+        self.game._load_menu_background()
         return self.game.game_loop(screen, self.build_buttons())
-
+    
 class TitleScreen(MenuScreenBase):
     def build_buttons(self):
         start_btn = UIElement((0.5, 0.20), "Start Game", 50, WHITE, GameState.PLAYING)
@@ -191,6 +198,7 @@ class ControlsScreen:
         pygame.time.delay(1000)
 
     def run(self, screen) -> GameState:
+        self.game._load_menu_background()
         c = self.game.controls
         title = UIElement((0.5, 0.2), "CLICK TO CHANGE KEYS", 50, WHITE)
         btn_left = UIElement((0.5, 0.35), f"move left: {pygame.key.name(c.left).upper()}", 25, WHITE, "CHANGE_LEFT")
@@ -205,6 +213,13 @@ class ControlsScreen:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return GameState.QUIT
+                if event.type == pygame.VIDEORESIZE:
+                    self.game.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
+                    screen = self.game.screen
+                    recalc_display_metrics(screen)
+                    self.game._load_menu_background()
+                    for button in buttons:
+                        button.refresh_scaling()
                 if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     mouse_up = True
 
@@ -212,17 +227,18 @@ class ControlsScreen:
 
             for button in buttons:
                 ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
-                
+
                 if ui_action is not None:
                     if isinstance(ui_action, GameState):
                         return ui_action
 
                     button.set_text("PRESS KEY...", 25, YELLOW)
-                   
-                    buttons.draw(screen) 
+                    buttons.draw(screen)
                     pygame.display.flip()
-        
+
                     new = self.wait_for_key()
+                    if new is None:
+                        return GameState.QUIT
 
                     if not c.key_is_taken(new):
                         if ui_action == "CHANGE_LEFT":
@@ -314,7 +330,7 @@ class SoundScreen:
 class VideoScreen:
     def __init__(self, game):
         self.game = game
-        self.available_skins = ["spaceshipp.png", "spaceship.png"]
+        self.available_skins = ["spaceshipp.png", "spaceship.png", "spaceship3.png"]
         self.skin_index = self.available_skins.index(self.game.current_skin) if self.game.current_skin in self.available_skins else 0
 
     def get_skin_text(self):
@@ -349,7 +365,8 @@ class VideoScreen:
                 preview_base_size = 150
                 skin_corrections = {
                     "spaceshipp.png" : 1.0,
-                    "spaceship.png" : 1.5
+                    "spaceship.png" : 1.5,
+                    "spaceship3.png" : 1.5
                 }
                 multiplier = skin_corrections.get(self.game.current_skin, 1.0)
                 preview_size = int(preview_base_size * multiplier * MIN_SCALE)
@@ -389,25 +406,35 @@ class LevelSession:
         self.portal_image = None
 
         self.block_count = 4
+        self.player_radius = 0
+        self.player_max_speed = 0
+        self.player_accel = 0
+        self.player_friction = 0.82
+        self.start_speed = 0
+        self.speed_increase = 0
+        self.max_fall_speed = 0
+        self.splitter_chance = 0.10
+        self.split_trigger_margin = 0
+        self.split_child_spread = 0
+        self.split_max_extra = 8
+        self.apply_scaling()
+
+    def apply_scaling(self):
         self.player_radius = max(1, int(20 * MIN_SCALE))
         self.player_max_speed = 11 * MIN_SCALE
         self.player_accel = 1.8 * MIN_SCALE
-        self.player_friction = 0.82
-
         self.start_speed = 3.5 * SCALE_H
         self.speed_increase = 0.0007 * SCALE_H
         self.max_fall_speed = 14 * SCALE_H
-
-        self.splitter_chance = 0.10
         self.split_trigger_margin = 40 * MIN_SCALE
         self.split_child_spread = 3.8 * MIN_SCALE
-        self.split_max_extra = 8
 
     def load_assets(self):
         base_size = 45
         skin_data = {
             "spaceshipp.png" : {"visual": 1.0, "hitbox": 0.9},
-            "spaceship.png" : {"visual": 1.5, "hitbox": 0.6}
+            "spaceship.png" : {"visual": 1.5, "hitbox": 0.6},
+            "spaceship3.png" : {"visual": 1.6, "hitbox": 0.85}
         }
 
         data = skin_data.get(self.game.current_skin, {"visual": 1.0, "hitbox": 0.8})
@@ -500,7 +527,8 @@ class LevelSession:
             "split_done": False,
             "vx": random.uniform(-drift_strength, drift_strength),
             "vy": random.uniform(-0.5 * MIN_SCALE, 0.5 * MIN_SCALE),
-            "zigzag": is_zigzag
+            "zigzag": is_zigzag,
+            "zigzag_offset": random.randint(0, 10000),
         }
 
     def create_blocks(self, level_mode="down"):
@@ -542,7 +570,9 @@ class LevelSession:
 
         for block in blocks:
             if block.get("zigzag") == True:
-                golf = math.sin(pygame.time.get_ticks() * 0.005) * (4 * MIN_SCALE)
+                tijd = pygame.time.get_ticks() + block["zigzag_offset"]
+                golf = math.sin(tijd * 0.005) * (4 * MIN_SCALE)
+                
                 if level_mode == "side":
                     block["y"] += golf
                 else:
@@ -582,9 +612,6 @@ class LevelSession:
             bx = int(b["x"])
             by = int(b["y"])
 
-            # --- OPTIMALISATIE START ---
-            # We checken of dit blokje al een plaatje heeft.
-            # Zo niet ("Lazy Loading"), dan maken we die NU aan en slaan we hem op.
             if b.get("image") is None:
                 if self.meteor_small and self.meteor_medium and self.meteor_large:
                     boundary_small = 40 * MIN_SCALE
@@ -596,23 +623,13 @@ class LevelSession:
                         base_img = self.meteor_medium
                     else:
                         base_img = self.meteor_large
-                    
-                    # Hier gebeurt het zware werk (schalen), maar dit doen we nu 
-                    # maar 1 keer per meteoor in plaats van 60 keer per seconde!
-                    b["image"] = pygame.transform.scale(base_img, (size, size))
-                if b.get("image"):
-                    surface.blit(b["image"], (bx, by))
-                
-                else:
-                    b["image"] = None
 
-            # Nu tekenen we gewoon het opgeslagen plaatje
+                    b["image"] = pygame.transform.scale(base_img, (size, size))
+
             if b.get("image"):
                 surface.blit(b["image"], (bx, by))
             else:
-                # Fallback: als er geen plaatjes zijn geladen, teken een wit vierkant
                 pygame.draw.rect(surface, WHITE, (bx, by, size, size))
-            # --- OPTIMALISATIE EINDE ---
 
             if b["splitter"] and not b["split_done"]:
                 radius = int((size // 2) + (8 * MIN_SCALE))
@@ -666,12 +683,21 @@ class LevelSession:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return GameState.QUIT
-                
-                if event.type == pygame.VIDEORESIZE:
-                    self.game.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
-                    recalc_display_metrics(self.game.screen)
 
+                if event.type == pygame.VIDEORESIZE:
+                    old_w, old_h = SCREEN_WIDTH, SCREEN_HEIGHT
+                    rx = x / old_w if old_w else 0.5
+                    ry = y / old_h if old_h else 0.5
+
+                    self.game.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
+                    screen = self.game.screen
+                    recalc_display_metrics(screen)
+                    self.game._load_menu_background()
+                    self.apply_scaling()
                     self.load_assets()
+
+                    x = rx * SCREEN_WIDTH
+                    y = ry * SCREEN_HEIGHT
 
                     for block in blocks:
                         block["image"] = None
@@ -836,6 +862,12 @@ class Game:
             screen.fill(BLUE)
 
     def game_loop(self, screen, buttons: RenderUpdates) -> GameState:
+        screen = self.screen
+        self._load_menu_background()
+        for btn in buttons:
+            if hasattr(btn, "refresh_scaling"):
+                btn.refresh_scaling()
+
         while True:
             if not pygame.mixer.music.get_busy():
                 audio.play_music(audio_path.menu_music, 0.5)
@@ -846,11 +878,13 @@ class Game:
                     return GameState.QUIT
                 if event.type == pygame.VIDEORESIZE:
                     self.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
+                    screen = self.screen
                     recalc_display_metrics(self.screen)
                     self._load_menu_background()
                     for btn in buttons:
-                        if hasattr(btn, 'refresh_scaling'):
+                        if hasattr(btn, "refresh_scaling"):
                             btn.refresh_scaling()
+
 
                 if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     mouse_up = True
@@ -877,6 +911,7 @@ class Game:
             elif game_state == GameState.PLAYING:
                 game_state = LevelSession(self).run(self.screen)
             elif game_state == GameState.GAMEOVER:
+                self._load_menu_background()
                 audio.play_music(audio_path.gameover_music, 0.5, loop=0)
                 game_state = self.game_over_screen.run(self.screen)
             elif game_state == GameState.OPTIONS:
