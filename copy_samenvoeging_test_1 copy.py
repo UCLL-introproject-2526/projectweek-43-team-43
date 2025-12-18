@@ -620,7 +620,7 @@ class LevelSession:
         if len(blocks) < self.block_count + extra_planeten:
             blocks.append(self.make_block(current_score, level_mode))
 
-    def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active):
+    def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active, player_vx):
         surface.fill(BLACK)
         if self.bg_images:
             self.bg_scroll += self.bg_speed
@@ -666,7 +666,13 @@ class LevelSession:
 
         if immunity == 0 or (immunity // 5) % 2 == 0:
             if self.player_image:
-                surface.blit(self.player_image, self.player_image.get_rect(center=(int(px), int(py))))
+                
+                tilt_angle = player_vx * -2.5
+                rotated_player = pygame.transform.rotate(self.player_image, tilt_angle)
+                player_rect = rotated_player.get_rect(center=(int(px), int(py)))
+
+
+                surface.blit(rotated_player, player_rect)
             else:
                 pygame.draw.circle(surface, GAME_BLUE, (int(px), int(py)), self.player_radius)
 
@@ -712,6 +718,10 @@ class LevelSession:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return GameState.QUIT
+                
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        return GameState.TITLE
 
                 if event.type == pygame.VIDEORESIZE:
                     old_w, old_h = SCREEN_WIDTH, SCREEN_HEIGHT
@@ -845,7 +855,7 @@ class LevelSession:
                         return GameState.GAMEOVER
                     break
 
-            self.render_frame(screen, blocks, x, y, score, lives, immunity_timer, portal_rect, portal_active)
+            self.render_frame(screen, blocks, x, y, score, lives, immunity_timer, portal_rect, portal_active, player_vx)
 
 class Game:
     def __init__(self):
