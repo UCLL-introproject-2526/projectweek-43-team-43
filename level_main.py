@@ -37,12 +37,13 @@ class GameState(Enum):
     TITLE = 0
     PLAYING_LVL1 = 1
     PLAYING_LVL2 = 2
-    OPTIONS = 3
+    PLAYING_LVL3 = 3
     VIDEO_SETTINGS = 4
     SOUND = 5
     CONTROLS = 6
     LEVEL_SELECT = 7
     GAMEOVER = 8
+    OPTIONS = 9
 
 class Controls:
     def __init__(self):
@@ -166,16 +167,20 @@ class LevelSelectScreen:
                 title = self.font.render("KIES EEN LEVEL", True, WHITE)
                 screen.blit(title, (CENTER_X - title.get_width()//2, 150))
                 
-                btn_lvl1 = pygame.Rect(SCREEN_WIDTH//2 - 200, 300, 400, 80)
-                btn_lvl2 = pygame.Rect(SCREEN_WIDTH//2 - 200, 450, 400, 80)
+                btn_lvl1 = pygame.Rect(SCREEN_WIDTH//2 - 200, 250, 400, 80)
+                btn_lvl2 = pygame.Rect(SCREEN_WIDTH//2 - 200, 350, 400, 80)
+                btn_lvl3 = pygame.Rect(SCREEN_WIDTH//2 - 200, 450, 400, 80)
                 
                 pygame.draw.rect(screen, BLUE if btn_lvl1.collidepoint(mouse_pos) else DARK_GRAY, btn_lvl1, border_radius=10)
                 pygame.draw.rect(screen, GREEN if btn_lvl2.collidepoint(mouse_pos) else DARK_GRAY, btn_lvl2, border_radius=10)
+                pygame.draw.rect(screen, RED if btn_lvl3.collidepoint(mouse_pos) else DARK_GRAY, btn_lvl3, border_radius=10)
                 
                 t1 = self.font.render("Level 1", True, WHITE)
                 t2 = self.font.render("Level 2", True, WHITE)
+                t3 = self.font.render("Level 3", True, WHITE)
                 screen.blit(t1, (btn_lvl1.centerx - t1.get_width()//2, btn_lvl1.centery - t1.get_height()//2))
                 screen.blit(t2, (btn_lvl2.centerx - t2.get_width()//2, btn_lvl2.centery - t2.get_height()//2))
+                screen.blit(t3, (btn_lvl3.centerx - t3.get_width()//2, btn_lvl3.centery - t3.get_height()//2))
             else:
                 title = self.font.render("KIES MOEILIJKHEIDSGRAAD", True, WHITE)
                 screen.blit(title, (CENTER_X - title.get_width()//2, 150))
@@ -202,6 +207,7 @@ class LevelSelectScreen:
                     if self.selected_level is None:
                         if btn_lvl1.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL1
                         if btn_lvl2.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL2
+                        if btn_lvl3.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL3
                     else:
                         if btn_easy.collidepoint(event.pos): self.set_difficulty("EASY"); return self.selected_level
                         if btn_med.collidepoint(event.pos): self.set_difficulty("MEDIUM"); return self.selected_level
@@ -637,7 +643,7 @@ class LevelSession2:
                         break
             self.render_frame(screen, blocks, x, y, score, lives, immunity, current_portal_rect)
 
-class LevelSession:
+class LevelSession3:
     def __init__(self, game):
         self.game = game
         self.load_assets()
@@ -672,23 +678,42 @@ class LevelSession:
         blocks = []
         for _ in range(self.game.active_block_count):
             size = random.randint(20, 60)
-            bx = random.randint(0, SCREEN_WIDTH - size)
-            by = random.randint(-500, 0)
-            blocks.append([bx, by, size])
+            richting = random.choice([0, 1])
+            
+            if richting == 0:
+                bx = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + 500)
+            else:
+                bx = random.randint(-500, -size)
+                
+            by = random.randint(0, SCREEN_HEIGHT - size)
+            blocks.append([bx, by, size, richting])
         return blocks
 
     def update_blocks(self, blocks, fall_speed, current_score):
         for block in blocks:
-            block[1] += fall_speed
-            if block[1] > SCREEN_HEIGHT: 
-                block[2] = random.randint(20, 60)
-                block[1] = random.randint(-150, 0)
-                block[0] = random.randint(0, SCREEN_WIDTH - block[2])
+
+            if block[3] == 0:
+                block[0] -= fall_speed  
+                if block[0] < -block[2]:
+                    block[0] = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + 150)
+                    block[1] = random.randint(0, SCREEN_HEIGHT - block[2])
+                    block[2] = random.randint(20, 60)
+            else:
+                block[0] += fall_speed 
+                if block[0] > SCREEN_WIDTH:
+                    block[0] = random.randint(-150, -block[2])
+                    block[1] = random.randint(0, SCREEN_HEIGHT - block[2])
+                    block[2] = random.randint(20, 60)
+
         zichtbare_score = current_score // 10
         max_b = min(self.game.active_block_count + (zichtbare_score // 50), self.game.active_max_blocks)
         if len(blocks) < max_b:
             size = random.randint(20, 60)
-            blocks.append([random.randint(0, SCREEN_WIDTH - size), random.randint(-150, 0), size])
+            richting = random.choice([0, 1])
+            if richting == 0:
+                blocks.append([random.randint(SCREEN_WIDTH, SCREEN_WIDTH + 150), random.randint(0, SCREEN_HEIGHT - size), size, 0])
+            else:
+                blocks.append([random.randint(-150, -size), random.randint(0, SCREEN_HEIGHT - size), size, 1])
 
     def render_frame(self, surface, blocks, player_x, player_y, current_score, current_lives, immunity_timer):
         surface.blit(self.background_image, (0, 0))
@@ -819,6 +844,9 @@ class Game:
             elif game_state == GameState.PLAYING_LVL2:
                 self.current_playing_level = GameState.PLAYING_LVL2
                 game_state = LevelSession2(self).run(self.screen)
+            elif game_state == GameState.PLAYING_LVL3:
+                self.current_playing_level = GameState.PLAYING_LVL3
+                game_state = LevelSession3(self).run(self.screen)
             elif game_state == GameState.GAMEOVER:
                 audio.play_music(audio_path.gameover_music, 0.5, loop=0)
                 game_state = self.game_over_screen.run(self.screen)
