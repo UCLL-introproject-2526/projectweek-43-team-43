@@ -223,3 +223,25 @@ def refresh_scaling(self):
             default_image.get_rect(center=(new_x, new_y)),
             highlighted_image.get_rect(center=(new_x, new_y)),
         ]  
+
+verander de block in blocks op lijn iets rond de 750 ofzo, daar veranderd ge enkel het deeltje van de for loop tot en met break
+
+for block in blocks:
+                planet_radius = block["size"] / 2
+                hitbox_radius = planet_radius - (6 * MIN_SCALE) 
+                
+                planet_center_x = block["x"] + planet_radius
+                planet_center_y = block["y"] + planet_radius
+
+                distance = math.hypot(x - planet_center_x, y - planet_center_y)
+
+                if distance < (self.player_radius + hitbox_radius) and immunity_timer == 0 and not portal_active:
+                    lives -= 1
+                    if lives > 0:
+                        audio.play_sfx(audio_path.hit_sound, 0.5)
+                        immunity_timer = 90 
+                    else:
+                        self.game.last_score = score // 10
+                        pygame.mouse.set_visible(True)
+                        return GameState.GAMEOVER
+                    break
