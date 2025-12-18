@@ -317,6 +317,8 @@ class SoundScreen:
 
                 elif ui_action == "TOGGLE_SFX":
                     audio.toggle_sfx()
+                    if audio.sfx_enabled:
+                        audio.play_sfx(audio_path.button_sound, 0.5)
                     new_effects_text, new_effects_col = self.get_sfx_info()
                     button.set_text(new_effects_text, 30, new_effects_col)
 
@@ -565,6 +567,9 @@ class LevelSession:
         else:
             if abs(block["y"] - CENTER_Y) > self.split_trigger_margin:
                 return
+            
+        if audio.sfx_enabled:
+            audio.play_sfx(audio_path.split_sound, 0.2)
 
         block["split_done"] = True
         parent_size = block["size"]
