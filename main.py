@@ -183,6 +183,7 @@ class ControlsScreen:
         btn_down = UIElement((CENTER_X, 400 * SCALE_H), f"move down: {pygame.key.name(c.down).upper()}", 25, WHITE, "CHANGE_DOWN")
         btn_up = UIElement((CENTER_X, 500 * SCALE_H), f"move up: {pygame.key.name(c.up).upper()}", 25, WHITE, "CHANGE_UP")
         back_btn = UIElement((CENTER_X, 600 * SCALE_H), "Back to Options", 30, WHITE, GameState.OPTIONS)
+
         buttons = RenderUpdates(title, btn_left, btn_right, btn_down, btn_up, back_btn)
 
         while True:
@@ -197,13 +198,21 @@ class ControlsScreen:
 
             for button in buttons:
                 ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
+                
                 if ui_action is not None:
                     if isinstance(ui_action, GameState):
                         return ui_action
 
                     button.set_text("PRESS KEY...", 25, YELLOW)
-                    button.draw(screen)
+                    
+                    # --- DE FIX START HIER ---
+                    # Voordat we het spel pauzeren (wait_for_key), tekenen we 
+                    # geforceerd ALLE knoppen, ook die onder de huidige knop staan.
+                    buttons.draw(screen) 
                     pygame.display.flip()
+                    # --- DE FIX EINDIGT HIER ---
+
+                    # 2. Nu pas wachten we
                     new = self.wait_for_key()
 
                     if not c.key_is_taken(new):
@@ -218,6 +227,7 @@ class ControlsScreen:
                     else:
                         self.show_taken_error(button, screen)
 
+                    # 3. Update alle teksten weer
                     btn_left.set_text(f"move left: {pygame.key.name(c.left).upper()}", 25, WHITE)
                     btn_right.set_text(f"move right: {pygame.key.name(c.right).upper()}", 25, WHITE)
                     btn_down.set_text(f"move down: {pygame.key.name(c.down).upper()}", 25, WHITE)

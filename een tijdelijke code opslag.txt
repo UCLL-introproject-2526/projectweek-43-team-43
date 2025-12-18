@@ -145,3 +145,8 @@ def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_r
             surface.blit(FONT_SCORE.render(f"Lives: {lives}", True, RED), (20, 20))
 
         pygame.display.flip()
+
+def run aanpassen: nieuwe erover plakken:
+
+
+
