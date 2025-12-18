@@ -89,25 +89,24 @@ class UIElement(Sprite):
         new_x = self.ratio_position[0] * SCREEN_WIDTH
         new_y = self.ratio_position[1] * SCREEN_HEIGHT
 
-        default_image = TextFactory.create_surface_with_text(text, int(font_size * 1.2), text_rgb)
+        default_image = TextFactory.create_surface_with_text(self.text, int(self.font_size * 1.2), self.text_rgb)
+        highlighted_image = TextFactory.create_surface_with_text(self.text, int(self.font_size * 1.2), self.text_rgb)
 
 
-
-        self.images = [default_image, highlighted_image]
+        self.images = [
+            TextFactory.create_surface_with_text(self.text, self.font_size, self.text_rgb),
+            TextFactory.create_surface_with_text(self.text, int(self.font_size * 1.2), self.text_rgb)
+        ]
         self.rects = [
-            default_image.get_rect(center = (new_x, new_y)),
-            highlighted_image.get_rect(center = (new_x, new_y)),
+            self.images[0].get_rect(center=(new_x, new_y)),
+            self.images[1].get_rect(center=(new_x, new_y)),
         ]
 
-    def set_text(self, text, font_size, text_rgb):
-        default_image = TextFactory.create_surface_with_text(text, font_size, text_rgb)
-        highlighted_image = TextFactory.create_surface_with_text(text, int(font_size * 1.2), text_rgb)
-        self.images = [default_image, highlighted_image]
-        current_center = self.rects[0].center
-        self.rects = [
-            default_image.get_rect(center=current_center),
-            highlighted_image.get_rect(center=current_center),
-        ]
+    def set_text(self, text, font_size=None, text_rgb=None):
+        self.text = text
+        if font_size: self.font_size = font_size
+        if text_rgb: self.text_rgb = text_rgb
+        self.refresh_scaling()
 
     @property
     def image(self):
@@ -200,6 +199,12 @@ class ControlsScreen:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return GameState.QUIT
+                if event.type == pygame.VIDEORESIZE:
+                    self.game.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
+                    recalc_display_metrics(self.game.screen)
+                    self.game._load_menu_background()
+                    for btn in buttons:
+                        btn.refresh_scaling()
                 if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                     mouse_up = True
 
@@ -551,24 +556,20 @@ class LevelSession:
             bx = int(b["x"])
             by = int(b["y"])
 
-            # --- OPTIMALISATIE START ---
-            # We checken of dit blokje al een plaatje heeft.
-            # Zo niet ("Lazy Loading"), dan maken we die NU aan en slaan we hem op.
             if b.get("image") is None:
                 if self.meteor_small and self.meteor_medium and self.meteor_large:
-                    boundary_small = 40 * MIN_SCALE
-                    boundary_medium = 50 * MIN_SCALE
-
-                    if size < boundary_small:
-                        base_img = self.meteor_small
-                    elif size < boundary_medium:
-                        base_img = self.meteor_medium
-                    else:
-                        base_img = self.meteor_large
-                    
-                    # Hier gebeurt het zware werk (schalen), maar dit doen we nu 
-                    # maar 1 keer per meteoor in plaats van 60 keer per seconde!
+                    # Kies de juiste meteor op basis van grootte
+                    if size < 40 * MIN_SCALE: base_img = self.meteor_small
+                    elif size < 55 * MIN_SCALE: base_img = self.meteor_medium
+                    else: base_img = self.meteor_large
                     b["image"] = pygame.transform.scale(base_img, (size, size))
+            
+            # Teken de meteor (als de afbeelding gelukt is)
+            if b.get("image"):
+                surface.blit(b["image"], (bx, by))
+            else:
+                pygame.draw.rect(surface, WHITE, (bx, by, size, size))
+                
                 if b.get("image"):
                     surface.blit(b["image"], (bx, by))
                 
@@ -855,6 +856,15 @@ class Game:
             elif game_state == GameState.QUIT:
                 pygame.quit()
                 sys.exit()
+
+    def wait_for_key(self):
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN:
+                    return event.key
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
 
 def main():
     Game().run()
