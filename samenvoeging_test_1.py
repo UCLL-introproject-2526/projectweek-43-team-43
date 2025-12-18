@@ -628,7 +628,6 @@ class LevelSession:
         if len(blocks) < self.block_count + extra_planeten:
             blocks.append(self.make_block(current_score, level_mode))
 
-<<<<<<< HEAD
     def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active, player_vx):
         
         offset_x = 0
@@ -648,14 +647,6 @@ class LevelSession:
             next_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
             canvas.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
             canvas.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
-=======
-    def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active):
-        surface.fill(BLACK)
-        if self.bg_images:
-            surface.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
-            next_index = (self.current_bg_index + 1) % len(self.bg_images)
-            surface.blit(self.bg_images[next_index], (0, self.bg_scroll - SCREEN_HEIGHT))
->>>>>>> ffcba9dee1c526f10f75fd34242c679b08985187
         elif self.background_image:
             canvas.blit(self.background_image, (0, 0))
 
@@ -674,11 +665,7 @@ class LevelSession:
                 else: b["image"] = None
 
             if b.get("image"):
-<<<<<<< HEAD
                 canvas.blit(b["image"], (bx, by))
-=======
-                surface.blit(b["image"], (int(b["x"]), int(b["y"])))
->>>>>>> ffcba9dee1c526f10f75fd34242c679b08985187
             else:
                 pygame.draw.rect(surface, WHITE, (int(b["x"]), int(b["y"]), b["size"], b["size"]))
 
@@ -688,7 +675,6 @@ class LevelSession:
 
         if immunity <= 0 or (int(immunity) // 5) % 2 == 0:
             if self.player_image:
-<<<<<<< HEAD
                 
                 tilt_angle = player_vx * -2.5
                 rotated_player = pygame.transform.rotate(self.player_image, tilt_angle)
@@ -696,9 +682,6 @@ class LevelSession:
 
 
                 canvas.blit(rotated_player, player_rect)
-=======
-                surface.blit(self.player_image, self.player_image.get_rect(center=(int(px), int(py))))
->>>>>>> ffcba9dee1c526f10f75fd34242c679b08985187
             else:
                 pygame.draw.circle(surface, GAME_BLUE, (int(px), int(py)), self.player_radius)
             
