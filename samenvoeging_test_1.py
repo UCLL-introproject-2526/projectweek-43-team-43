@@ -651,9 +651,11 @@ class LevelSession:
             canvas.blit(self.background_image, (0, 0))
 
         if portal_rect and self.portal_image:
-            V.blit(self.portal_image, portal_rect)
+            canvas.blit(self.portal_image, portal_rect)
 
         for b in blocks:
+            bx = int(b["x"])
+            by = int(b["y"])
             if b.get("image") is None:
                 if self.meteor_small and self.meteor_medium and self.meteor_large:
                     boundary_small = 40 * MIN_SCALE
@@ -671,7 +673,7 @@ class LevelSession:
 
             if b["splitter"] and not b["split_done"]:
                 radius = int((b["size"] // 2) + (8 * MIN_SCALE))
-                pygame.draw.circle(surface, YELLOW, (int(b["x"] + b["size"] // 2), int(b["y"] + b["size"] // 2)), max(1, radius), 3)
+                pygame.draw.circle(canvas, YELLOW, (int(b["x"] + b["size"] // 2), int(b["y"] + b["size"] // 2)), max(1, radius), 3)
 
         if immunity <= 0 or (int(immunity) // 5) % 2 == 0:
             if self.player_image:
@@ -883,7 +885,7 @@ class LevelSession:
                         return GameState.GAMEOVER
                     break
 
-            self.render_frame(screen, blocks, x, y, score, lives, immunity_timer, portal_rect, portal_active)
+            self.render_frame(screen, blocks, x, y, score, lives, immunity_timer, portal_rect, portal_active, player_vx)
 
 class Game:
     def __init__(self):
