@@ -124,6 +124,8 @@ class UIElement(Sprite):
         if self.rect.collidepoint(mouse_pos):
             self.mouse_over = True
             if mouse_up:
+                if audio.sfx_enabled:
+                    audio.play_sfx(audio_path.button_sound, 0.5)
                 return self.action
         else:
             self.mouse_over = False
@@ -301,8 +303,6 @@ class SoundScreen:
                     audio.toggle_sfx()
                     new_effects_text, new_effects_col = self.get_sfx_info()
                     button.set_text(new_effects_text, 30, new_effects_col)
-                    if audio.sfx_enabled:
-                        audio.play_sfx(audio_path.hit_sound, 0.5)
 
                 elif isinstance(ui_action, GameState):
                     return ui_action
@@ -346,15 +346,22 @@ class VideoScreen:
             self.game.draw_menu_background(screen)
 
             try:
-                preview_size = max(1, int(120 * MIN_SCALE))
+                preview_base_size = 150
+                skin_corrections = {
+                    "spaceshipp.png" : 1.0,
+                    "spaceship.png" : 1.5
+                }
+                multiplier = skin_corrections.get(self.game.current_skin, 1.0)
+                preview_size = int(preview_base_size * multiplier * MIN_SCALE)
+
                 preview_path = f"images/{self.game.current_skin}"
                 preview_img = pygame.image.load(preview_path).convert_alpha()
                 preview_img = pygame.transform.scale(preview_img, (preview_size, preview_size))
-                preview_rect = preview_img.get_rect(center=(int(CENTER_X), int(450 * SCALE_H)))
+                
+                preview_rect = preview_img.get_rect(center=(int(SCREEN_WIDTH * 0.5), int(SCREEN_HEIGHT * 0.55)))
                 screen.blit(preview_img, preview_rect)
             except:
-                pygame.draw.circle(screen, YELLOW, (int(CENTER_X), int(450 * SCALE_H)), max(1, int(40 * MIN_SCALE)))
-
+                pygame.draw.circle(screen, YELLOW, (int(SCREEN_WIDTH * 0.5), int(SCREEN_HEIGHT * 0.55)), int(40 * MIN_SCALE))
             for button in buttons:
                 ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
 
@@ -362,7 +369,6 @@ class VideoScreen:
                     self.skin_index = (self.skin_index + 1) % len(self.available_skins)
                     self.game.current_skin = self.available_skins[self.skin_index]
                     button.set_text(self.get_skin_text(), 35, YELLOW)
-                    audio.play_sfx(audio_path.hit_sound, 0.2)
 
                 elif isinstance(ui_action, GameState):
                     return ui_action
@@ -392,15 +398,26 @@ class LevelSession:
         self.speed_increase = 0.0007 * SCALE_H
         self.max_fall_speed = 14 * SCALE_H
 
-        self.splitter_chance = 0.22
+        self.splitter_chance = 0.10
         self.split_trigger_margin = 40 * MIN_SCALE
         self.split_child_spread = 3.8 * MIN_SCALE
         self.split_max_extra = 8
 
     def load_assets(self):
+        base_size = 45
+        skin_data = {
+            "spaceshipp.png" : {"visual": 1.0, "hitbox": 0.9},
+            "spaceship.png" : {"visual": 1.5, "hitbox": 0.6}
+        }
+
+        data = skin_data.get(self.game.current_skin, {"visual": 1.0, "hitbox": 0.8})
+
+        final_pixel_size = int(base_size * data["visual"] * MIN_SCALE)
+
+        self.player_radius = int((final_pixel_size // 2) * data["hitbox"])
         try:
             self.player_image = pygame.image.load(f"images/{self.game.current_skin}").convert_alpha()
-            self.player_image = pygame.transform.scale(self.player_image, (self.player_radius * 2, self.player_radius * 2))
+            self.player_image = pygame.transform.scale(self.player_image, (final_pixel_size, final_pixel_size))
         except:
             self.player_image = None
 
@@ -420,8 +437,8 @@ class LevelSession:
             self.meteor_large = None
 
         try:
+            heart_size = int(30 * MIN_SCALE)
             self.heart_image = pygame.image.load("images/lives.png").convert_alpha()
-            heart_size = max(1, int(30 * MIN_SCALE))
             self.heart_image = pygame.transform.scale(self.heart_image, (heart_size, heart_size))
         except:
             self.heart_image = None
@@ -434,12 +451,12 @@ class LevelSession:
         except:
             self.portal_image = None
 
-    def make_block(self, level_mode="down"):
+    def make_block(self, current_score, level_mode="down"):
         base_size = random.randint(20, 65)
         size = max(1, int(base_size * MIN_SCALE))
         offset = max(1, int(500 * MIN_SCALE))
 
-        # ... (positie logica blijft hetzelfde als je had) ...
+        
         if level_mode == "side":
             x = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + offset)
             y = random.randint(0, max(1, SCREEN_HEIGHT - size))
@@ -450,11 +467,15 @@ class LevelSession:
             x = random.randint(0, max(1, SCREEN_WIDTH - size))
             y = random.randint(-offset, 0)
 
-        is_splitter = (random.random() < self.splitter_chance)
+        is_splitter = (random.random() < 0.10)
+
+        is_zigzag = False
+        if current_score > 2500 and random.random() < 0.3:
+            is_zigzag = True
+
+
         drift_strength = 1.2 * MIN_SCALE
         
-        # --- OPTIMALISATIE START ---
-        # Kies en schaal de afbeelding HIER, één keer bij het aanmaken
         block_img = None
         if self.meteor_small and self.meteor_medium and self.meteor_large:
             boundary_small = 40 * MIN_SCALE
@@ -467,10 +488,9 @@ class LevelSession:
             else:
                 base_img = self.meteor_large
             
-            # Schaal de afbeelding nu en sla hem op
+            
             block_img = pygame.transform.scale(base_img, (size, size))
-        # --- OPTIMALISATIE EINDE ---
-
+        
         return {
             "x": float(x),
             "y": float(y),
@@ -480,13 +500,14 @@ class LevelSession:
             "split_done": False,
             "vx": random.uniform(-drift_strength, drift_strength),
             "vy": random.uniform(-0.5 * MIN_SCALE, 0.5 * MIN_SCALE),
+            "zigzag": is_zigzag
         }
 
     def create_blocks(self, level_mode="down"):
-        return [self.make_block(level_mode) for _ in range(self.block_count)]
+        return [self.make_block(0, level_mode) for _ in range(self.block_count)]
 
-    def respawn_block(self, block, level_mode):
-        block.update(self.make_block(level_mode))
+    def respawn_block(self, block,current_score, level_mode):
+        block.update(self.make_block(current_score, level_mode))
 
     def maybe_split(self, blocks, block, level_mode, max_allowed_blocks):
         if not block["splitter"] or block["split_done"]:
@@ -520,6 +541,13 @@ class LevelSession:
         max_allowed = self.block_count + extra_planeten + self.split_max_extra
 
         for block in blocks:
+            if block.get("zigzag") == True:
+                golf = math.sin(pygame.time.get_ticks() * 0.005) * (4 * MIN_SCALE)
+                if level_mode == "side":
+                    block["y"] += golf
+                else:
+                    block["x"] += golf
+            
             s = block["size"]
             if level_mode == "side":
                 block["x"] += fall_speed
@@ -527,19 +555,19 @@ class LevelSession:
                 block["x"] += block["vx"]
                 self.maybe_split(blocks, block, level_mode, max_allowed)
                 if block["x"] < -s:
-                    self.respawn_block(block, level_mode)
+                    self.respawn_block(block, current_score, level_mode)
             else:
                 block["y"] += fall_speed
                 block["x"] += block["vx"]
                 block["y"] += block["vy"]
                 self.maybe_split(blocks, block, level_mode, max_allowed)
                 if fall_speed > 0 and block["y"] > SCREEN_HEIGHT:
-                    self.respawn_block(block, "down")
+                    self.respawn_block(block, current_score, "down")
                 elif fall_speed < 0 and block["y"] < -s:
-                    self.respawn_block(block, "up")
+                    self.respawn_block(block, current_score, "up")
 
         if len(blocks) < self.block_count + extra_planeten:
-            blocks.append(self.make_block(level_mode))
+            blocks.append(self.make_block(current_score, level_mode))
 
     def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active):
         surface.fill(BLACK)
@@ -746,18 +774,22 @@ class LevelSession:
                     continue
 
             for block in blocks:
-                b_rect = pygame.Rect(int(block["x"]), int(block["y"]), block["size"], block["size"])
-                hitbox_margin = int(6 * MIN_SCALE)
-                hitbox = b_rect.inflate(-hitbox_margin, -hitbox_margin)
+                planet_radius = block["size"] / 2
+                hitbox_radius = planet_radius - (6 * MIN_SCALE) 
+                
+                planet_center_x = block["x"] + planet_radius
+                planet_center_y = block["y"] + planet_radius
 
-                if player_rect.colliderect(hitbox) and immunity_timer == 0 and not portal_active:
+                distance = math.hypot(x - planet_center_x, y - planet_center_y)
+
+                if distance < (self.player_radius + hitbox_radius) and immunity_timer == 0 and not portal_active:
                     lives -= 1
                     if lives > 0:
                         audio.play_sfx(audio_path.hit_sound, 0.5)
-                        # De extra render_frame mag ook weg, de loop pakt dit vanzelf op
                         immunity_timer = 90 
                     else:
                         self.game.last_score = score // 10
+                        pygame.mouse.set_visible(True)
                         return GameState.GAMEOVER
                     break
 
