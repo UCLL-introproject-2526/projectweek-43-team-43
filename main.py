@@ -419,16 +419,32 @@ class LevelSession:
 
         is_splitter = (random.random() < self.splitter_chance)
         drift_strength = 1.2 * MIN_SCALE
+        
+        block_img = None
+        if self.meteor_small and self.meteor_medium and self.meteor_large:
+            boundary_small = 40 * MIN_SCALE
+            boundary_medium = 50 * MIN_SCALE
+            
+            if size < boundary_small:
+                base_img = self.meteor_small
+            elif size < boundary_medium:
+                base_img = self.meteor_medium
+            else:
+                base_img = self.meteor_large
+            
+            block_img = pygame.transform.scale(base_img, (size, size))
+       
+
         return {
             "x": float(x),
             "y": float(y),
             "size": size,
+            "image": block_img,  
             "splitter": is_splitter,
             "split_done": False,
             "vx": random.uniform(-drift_strength, drift_strength),
             "vy": random.uniform(-0.5 * MIN_SCALE, 0.5 * MIN_SCALE),
         }
-
     def create_blocks(self, level_mode="down"):
         return [self.make_block(level_mode) for _ in range(self.block_count)]
 
@@ -501,17 +517,24 @@ class LevelSession:
             bx = int(b["x"])
             by = int(b["y"])
 
-            if self.meteor_small and self.meteor_medium and self.meteor_large:
-                boundary_small = 40 * MIN_SCALE
-                boundary_medium = 50 * MIN_SCALE
+            if "image" not in b or b["image"] is None:
+                if self.meteor_small and self.meteor_medium and self.meteor_large:
+                    boundary_small = 40 * MIN_SCALE
+                    boundary_medium = 50 * MIN_SCALE
 
-                if size < boundary_small:
-                    img = self.meteor_small
-                elif size < boundary_medium:
-                    img = self.meteor_medium
+                    if size < boundary_small:
+                        base_img = self.meteor_small
+                    elif size < boundary_medium:
+                        base_img = self.meteor_medium
+                    else:
+                        base_img = self.meteor_large
+                    
+                    b["image"] = pygame.transform.scale(base_img, (size, size))
                 else:
-                    img = self.meteor_large
-                surface.blit(pygame.transform.scale(img, (size, size)), (bx, by))
+                    b["image"] = None
+
+            if b.get("image"):
+                surface.blit(b["image"], (bx, by))
             else:
                 pygame.draw.rect(surface, WHITE, (bx, by, size, size))
 

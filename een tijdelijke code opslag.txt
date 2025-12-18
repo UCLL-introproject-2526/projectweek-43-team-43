@@ -1,0 +1,147 @@
+dit: 
+
+if player_rect.colliderect(hitbox) and immunity_timer == 0 and not portal_active:
+                    lives -= 1
+                    if lives > 0:
+                        audio.play_sfx(audio_path.hit_sound, 0.5)
+                        # De extra render_frame mag ook weg, de loop pakt dit vanzelf op
+                        immunity_timer = 90 
+                    else:
+                        self.game.last_score = score // 10
+                        return GameState.GAMEOVER
+                    break
+
+ipv:;
+
+if player_rect.colliderect(hitbox) and immunity_timer == 0 and not portal_active:
+                    lives -= 1
+                    if lives > 0:
+                        audio.play_sfx(audio_path.hit_sound, 0.5)
+                        # De extra render_frame mag ook weg, de loop pakt dit vanzelf op
+                        immunity_timer = 90 
+                    else:
+                        self.game.last_score = score // 10
+                        return GameState.GAMEOVER
+                    break
+
+Hotfix moet nog gedaan worden: bij controls wanneer je er 1 selecteerd worden de anderen eronder weggelaten tijdelijk
+
+
+def make block veranderen naar dit:
+
+def make_block(self, level_mode="down"):
+        base_size = random.randint(20, 65)
+        size = max(1, int(base_size * MIN_SCALE))
+        offset = max(1, int(500 * MIN_SCALE))
+
+        # ... (positie logica blijft hetzelfde als je had) ...
+        if level_mode == "side":
+            x = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + offset)
+            y = random.randint(0, max(1, SCREEN_HEIGHT - size))
+        elif level_mode == "up":
+            x = random.randint(0, max(1, SCREEN_WIDTH - size))
+            y = random.randint(SCREEN_HEIGHT, SCREEN_HEIGHT + offset)
+        else:
+            x = random.randint(0, max(1, SCREEN_WIDTH - size))
+            y = random.randint(-offset, 0)
+
+        is_splitter = (random.random() < self.splitter_chance)
+        drift_strength = 1.2 * MIN_SCALE
+        
+        # --- OPTIMALISATIE START ---
+        # Kies en schaal de afbeelding HIER, één keer bij het aanmaken
+        block_img = None
+        if self.meteor_small and self.meteor_medium and self.meteor_large:
+            boundary_small = 40 * MIN_SCALE
+            boundary_medium = 50 * MIN_SCALE
+            
+            if size < boundary_small:
+                base_img = self.meteor_small
+            elif size < boundary_medium:
+                base_img = self.meteor_medium
+            else:
+                base_img = self.meteor_large
+            
+            # Schaal de afbeelding nu en sla hem op
+            block_img = pygame.transform.scale(base_img, (size, size))
+        # --- OPTIMALISATIE EINDE ---
+
+        return {
+            "x": float(x),
+            "y": float(y),
+            "size": size,
+            "image": block_img,  # We slaan de afbeelding op in het blok
+            "splitter": is_splitter,
+            "split_done": False,
+            "vx": random.uniform(-drift_strength, drift_strength),
+            "vy": random.uniform(-0.5 * MIN_SCALE, 0.5 * MIN_SCALE),
+        }
+
+hele nieuwe render_frame:
+
+def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active):
+        surface.fill(BLACK)
+        if self.background_image:
+            surface.blit(self.background_image, (0, 0))
+
+        if portal_rect and self.portal_image:
+            surface.blit(self.portal_image, portal_rect)
+
+        for b in blocks:
+            size = b["size"]
+            bx = int(b["x"])
+            by = int(b["y"])
+
+            # --- OPTIMALISATIE START ---
+            # We checken of dit blokje al een plaatje heeft.
+            # Zo niet ("Lazy Loading"), dan maken we die NU aan en slaan we hem op.
+            if "image" not in b or b["image"] is None:
+                if self.meteor_small and self.meteor_medium and self.meteor_large:
+                    boundary_small = 40 * MIN_SCALE
+                    boundary_medium = 50 * MIN_SCALE
+
+                    if size < boundary_small:
+                        base_img = self.meteor_small
+                    elif size < boundary_medium:
+                        base_img = self.meteor_medium
+                    else:
+                        base_img = self.meteor_large
+                    
+                    # Hier gebeurt het zware werk (schalen), maar dit doen we nu 
+                    # maar 1 keer per meteoor in plaats van 60 keer per seconde!
+                    b["image"] = pygame.transform.scale(base_img, (size, size))
+                else:
+                    b["image"] = None
+
+            # Nu tekenen we gewoon het opgeslagen plaatje
+            if b.get("image"):
+                surface.blit(b["image"], (bx, by))
+            else:
+                # Fallback: als er geen plaatjes zijn geladen, teken een wit vierkant
+                pygame.draw.rect(surface, WHITE, (bx, by, size, size))
+            # --- OPTIMALISATIE EINDE ---
+
+            if b["splitter"] and not b["split_done"]:
+                radius = int((size // 2) + (8 * MIN_SCALE))
+                pygame.draw.circle(surface, YELLOW, (bx + size // 2, by + size // 2), max(1, radius), 3)
+
+        if immunity == 0 or (immunity // 5) % 2 == 0:
+            if self.player_image:
+                surface.blit(self.player_image, self.player_image.get_rect(center=(int(px), int(py))))
+            else:
+                pygame.draw.circle(surface, GAME_BLUE, (int(px), int(py)), self.player_radius)
+
+        score_x = SCREEN_WIDTH - max(1, int(200 * MIN_SCALE))
+        score_y = max(0, int(20 * MIN_SCALE))
+        surface.blit(FONT_SCORE.render(f"Score: {score // 10}", True, WHITE), (score_x, score_y))
+
+        if self.heart_image:
+            start_x = max(0, int(20 * MIN_SCALE))
+            y_pos = max(0, int(20 * MIN_SCALE))
+            spacing = max(1, int(35 * MIN_SCALE))
+            for i in range(lives):
+                surface.blit(self.heart_image, (start_x + (i * spacing), y_pos))
+        else:
+            surface.blit(FONT_SCORE.render(f"Lives: {lives}", True, RED), (20, 20))
+
+        pygame.display.flip()
