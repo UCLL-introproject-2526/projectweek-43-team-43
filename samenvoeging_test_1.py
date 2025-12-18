@@ -405,6 +405,11 @@ class LevelSession:
         self.heart_image = None
         self.portal_image = None
 
+        self.bg_scroll = 0
+        self.bg_speed = 1
+        self.current_bg_index = 0
+        self.bg_images = []
+
         self.block_count = 4
         self.player_radius = 0
         self.player_max_speed = 0
@@ -447,6 +452,17 @@ class LevelSession:
             self.player_image = pygame.transform.scale(self.player_image, (final_pixel_size, final_pixel_size))
         except:
             self.player_image = None
+
+        self.bg_images = []
+        for i in range(1, 5):
+            try:
+                img = pygame.image.load(f"images/bgob{i}.png").convert()
+                img = pygame.transform.scale(img, SCREEN_SIZE)
+                self.bg_images.append(img)
+            except:
+                pass
+        self.bg_scroll = 0
+        self.current_bg_index = 0
 
         try:
             self.background_image = pygame.image.load("images/galaxy.png").convert()
@@ -601,7 +617,15 @@ class LevelSession:
 
     def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active):
         surface.fill(BLACK)
-        if self.background_image:
+        if self.bg_images:
+            self.bg_scroll += self.bg_speed
+            if self.bg_scroll >= SCREEN_HEIGHT:
+                self.bg_scroll = 0
+                self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+            next_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+            surface.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
+            surface.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
+        elif self.background_image:
             surface.blit(self.background_image, (0, 0))
 
         if portal_rect and self.portal_image:
@@ -695,6 +719,8 @@ class LevelSession:
                     self.game._load_menu_background()
                     self.apply_scaling()
                     self.load_assets()
+                    self.bg_scroll = 0
+                    self.current_bg_index = 0
 
                     x = rx * SCREEN_WIDTH
                     y = ry * SCREEN_HEIGHT
@@ -702,14 +728,9 @@ class LevelSession:
                     for block in blocks:
                         block["image"] = None
 
-                    ratio_x = x / SCREEN_WIDTH
-                    ratio_y = y / SCREEN_HEIGHT
-                    x = ratio_x * event.w
-                    y = ratio_y * event.h
-
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        return GameState.TITLE
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_ESCAPE:
+                            return GameState.TITLE
 
             portal1 = ((score // 10) >= 250 and not level_flipped)
             portal2 = ((score // 10) >= 500 and level_flipped and not level_side)
@@ -931,3 +952,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
