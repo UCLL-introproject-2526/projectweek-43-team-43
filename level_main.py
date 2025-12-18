@@ -637,6 +637,126 @@ class LevelSession2:
                         break
             self.render_frame(screen, blocks, x, y, score, lives, immunity, current_portal_rect)
 
+class LevelSession:
+    def __init__(self, game):
+        self.game = game
+        self.load_assets()
+        self.bg_scroll = 0
+        self.bg_speed = 1
+        self.current_bg_index = 0
+
+    def load_assets(self):
+        try:
+            self.player_img = pygame.image.load("images/spaceshipp.png").convert_alpha()
+            self.player_img = pygame.transform.scale(self.player_img, (PLAYER_RADIUS * 2, PLAYER_RADIUS * 2))
+            self.background_image = pygame.image.load("images/galaxy.png").convert()
+            self.background_image = pygame.transform.scale(self.background_image, SCREEN_SIZE)
+            self.meteor_small = pygame.image.load("images/neptunus.png").convert_alpha()
+            self.meteor_medium = pygame.image.load("images/mars.png").convert_alpha()
+            self.meteor_large = pygame.image.load("images/jupiter.png").convert_alpha()
+            self.heart_image = pygame.image.load("images/lives.png").convert_alpha()
+            self.heart_image = pygame.transform.scale(self.heart_image, (30, 30))
+        except Exception as e:
+            print(f"Error assets L1: {e}")
+
+        self.bg_images = []
+        for i in range(1, 5):
+            try:
+                img = pygame.image.load(f"images/bgob{i}.png").convert()
+                img = pygame.transform.scale(img, SCREEN_SIZE)
+                self.bg_images.append(img)
+            except:
+                print(f"Kon afbeelding images/bgob{i}.png niet laden")
+
+    def create_blocks(self):
+        blocks = []
+        for _ in range(self.game.active_block_count):
+            size = random.randint(20, 60)
+            bx = random.randint(0, SCREEN_WIDTH - size)
+            by = random.randint(-500, 0)
+            blocks.append([bx, by, size])
+        return blocks
+
+    def update_blocks(self, blocks, fall_speed, current_score):
+        for block in blocks:
+            block[1] += fall_speed
+            if block[1] > SCREEN_HEIGHT: 
+                block[2] = random.randint(20, 60)
+                block[1] = random.randint(-150, 0)
+                block[0] = random.randint(0, SCREEN_WIDTH - block[2])
+        zichtbare_score = current_score // 10
+        max_b = min(self.game.active_block_count + (zichtbare_score // 50), self.game.active_max_blocks)
+        if len(blocks) < max_b:
+            size = random.randint(20, 60)
+            blocks.append([random.randint(0, SCREEN_WIDTH - size), random.randint(-150, 0), size])
+
+    def render_frame(self, surface, blocks, player_x, player_y, current_score, current_lives, immunity_timer):
+        surface.blit(self.background_image, (0, 0))
+        if self.bg_images:
+            self.bg_scroll += self.bg_speed
+        if self.bg_scroll >= SCREEN_HEIGHT:
+            self.bg_scroll = 0
+            self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        next_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        surface.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
+        surface.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
+
+        for block in blocks:
+            x_pos, y_pos, size = block[0], block[1], block[2]
+            img = self.meteor_small if size < 40 else (self.meteor_medium if size < 50 else self.meteor_large)
+            scaled = pygame.transform.scale(img, (size, size))
+            surface.blit(scaled, (x_pos, y_pos))
+        if immunity_timer == 0 or (immunity_timer // 5) % 2 == 0:
+            img_rect = self.player_img.get_rect(center=(int(player_x), int(player_y)))
+            surface.blit(self.player_img, img_rect)    
+        score_surface = FONT_SCORE.render("Score: " + str(current_score // 10), True, WHITE)
+        surface.blit(score_surface, (SCREEN_WIDTH - 180, 20))
+        for i in range(current_lives):
+            surface.blit(self.heart_image, (20 + (i * 35), 20))
+        pygame.display.flip()
+
+    def run(self, screen) -> GameState:
+        audio.play_music(audio_path.gameplay_music, 0.4)
+        c = self.game.controls
+        x, y = SCREEN_WIDTH // 2, SCREEN_HEIGHT - 100
+        x_velocity, y_velocity = 0, 0
+        blocks = self.create_blocks()
+        score, lives, immunity_timer = 0, 3, 0
+        clock = pygame.time.Clock()
+        while True:
+            clock.tick(60)
+            if immunity_timer > 0: immunity_timer -= 1
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT: return GameState.QUIT
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE: return GameState.TITLE
+                    if event.key == c.right: x_velocity = MOVEMENT_SPEED
+                    if event.key == c.left: x_velocity = -MOVEMENT_SPEED
+                    if event.key == c.up: y_velocity = -MOVEMENT_SPEED
+                    if event.key == c.down: y_velocity = MOVEMENT_SPEED
+                if event.type == pygame.KEYUP:
+                    if event.key in [c.right, c.left]: x_velocity = 0
+                    if event.key in [c.up, c.down]: y_velocity = 0
+            x += x_velocity
+            y += y_velocity
+            score += 1
+            fall_speed = min(self.game.active_start_speed + (score * self.game.active_speed_increase), MAX_SPEED)
+            self.update_blocks(blocks, fall_speed, score)
+            x = max(PLAYER_RADIUS, min(SCREEN_WIDTH - PLAYER_RADIUS, x))
+            y = max(PLAYER_RADIUS, min(SCREEN_HEIGHT - PLAYER_RADIUS, y))
+            player_rect = pygame.Rect(x - PLAYER_RADIUS, y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
+            for block in blocks:
+                block_rect = pygame.Rect(block[0], block[1], block[2], block[2])
+                if player_rect.colliderect(block_rect) and immunity_timer == 0:                
+                    lives -= 1
+                    audio.play_sfx(audio_path.hit_sound, 0.5)
+                    if lives <= 0:
+                        self.game.last_score = score // 10
+                        return GameState.GAMEOVER
+                    immunity_timer = 90
+                    break 
+            self.render_frame(screen, blocks, x, y, score, lives, immunity_timer)
+
 class Game:
     def __init__(self):
         pygame.init()
