@@ -340,6 +340,9 @@ class LevelSession:
     def __init__(self, game):
         self.game = game
         self.load_assets()
+        self.bg_scroll = 0
+        self.bg_speed = 1
+        self.current_bg_index = 0
 
     def load_assets(self):
         try:
@@ -354,6 +357,15 @@ class LevelSession:
             self.heart_image = pygame.transform.scale(self.heart_image, (30, 30))
         except Exception as e:
             print(f"Error assets L1: {e}")
+
+        self.bg_images = []
+        for i in range(1, 5):
+            try:
+                img = pygame.image.load(f"images/bgob{i}.png").convert()
+                img = pygame.transform.scale(img, SCREEN_SIZE)
+                self.bg_images.append(img)
+            except:
+                print(f"Kon afbeelding images/bgob{i}.png niet laden")
 
     def create_blocks(self):
         blocks = []
@@ -379,6 +391,15 @@ class LevelSession:
 
     def render_frame(self, surface, blocks, player_x, player_y, current_score, current_lives, immunity_timer):
         surface.blit(self.background_image, (0, 0))
+        if self.bg_images:
+            self.bg_scroll += self.bg_speed
+        if self.bg_scroll >= SCREEN_HEIGHT:
+            self.bg_scroll = 0
+            self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        next_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        surface.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
+        surface.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
+
         for block in blocks:
             x_pos, y_pos, size = block[0], block[1], block[2]
             img = self.meteor_small if size < 40 else (self.meteor_medium if size < 50 else self.meteor_large)
@@ -441,6 +462,9 @@ class LevelSession2:
         self.load_assets()
         self.level_flipped = False
         self.level_side = False
+        self.bg_scroll = 0
+        self.bg_speed = 1
+        self.current_bg_index = 0
 
     def load_assets(self):
         self.player_img = pygame.image.load("images/spaceshipp.png").convert_alpha()
@@ -454,6 +478,14 @@ class LevelSession2:
         self.heart_image = pygame.transform.scale(self.heart_image, (30, 30))
         self.portal_img = pygame.image.load("images/portal.png").convert_alpha()
         self.portal_img = pygame.transform.scale(self.portal_img, (200, 40))
+        self.bg_images = []
+        for i in range(1, 5):
+            try:
+                img = pygame.image.load(f"images/bgob{i}.png").convert()
+                img = pygame.transform.scale(img, SCREEN_SIZE)
+                self.bg_images.append(img)
+            except:
+                print(f"Kon afbeelding images/bgob{i}.png niet laden")
 
     def create_blocks(self, level_mode="down"):
         blocks = []
@@ -502,6 +534,14 @@ class LevelSession2:
 
     def render_frame(self, surface, blocks, player_x, player_y, current_score, current_lives, immunity_timer, portal_rect=None):
         surface.blit(self.background_image, (0, 0))
+        if self.bg_images:
+            self.bg_scroll += self.bg_speed
+        if self.bg_scroll >= SCREEN_HEIGHT:
+            self.bg_scroll = 0
+            self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        next_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+        surface.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
+        surface.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
         if portal_rect: surface.blit(self.portal_img, (portal_rect.x, portal_rect.y))
         for block in blocks:
             x_pos, y_pos, size = block[0], block[1], block[2]
