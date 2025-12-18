@@ -10,13 +10,13 @@ WHITE = (255, 255, 255)
 BLUE = (0, 100, 255)
 GREEN = (0, 255, 0)
 
-SCREEN_SIZE = (1024, 768)
-BLOCK_COUNT = 3
+SCREEN_SIZE = (1400, 800)
+BLOCK_COUNT = 5
 PLAYER_RADIUS = 20
 
 MOVEMENT_SPEED = 8
 START_SPEED = 3
-SPEED_INCREASE = 0.0005
+SPEED_INCREASE = 0.001
 MAX_SPEED = 12
 
 FONT_GAME_OVER = pygame.font.SysFont("Arial", 72, bold=True)
@@ -62,7 +62,7 @@ def update_blocks(blocks, fall_speed, current_score, level_mode):
                 block[0] = random.randint(0, SCREEN_SIZE[0] - block[2])
 
     zichtbare_score = current_score // 10
-    extra_planeten = (zichtbare_score // 100) * 1
+    extra_planeten = (zichtbare_score // 100) * 2
     if len(blocks) < BLOCK_COUNT + extra_planeten:
         size = random.randint(20, 60)
         if level_mode == "side":
