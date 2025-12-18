@@ -148,5 +148,59 @@ def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_r
 
 def run aanpassen: nieuwe erover plakken:
 
+def run(self, screen) -> GameState:
+        c = self.game.controls
+        title = UIElement((CENTER_X, 100 * SCALE_H), "CLICK TO CHANGE KEYS", 50, WHITE)
+        btn_left = UIElement((CENTER_X, 200 * SCALE_H), f"move left: {pygame.key.name(c.left).upper()}", 25, WHITE, "CHANGE_LEFT")
+        btn_right = UIElement((CENTER_X, 300 * SCALE_H), f"move right: {pygame.key.name(c.right).upper()}", 25, WHITE, "CHANGE_RIGHT")
+        btn_down = UIElement((CENTER_X, 400 * SCALE_H), f"move down: {pygame.key.name(c.down).upper()}", 25, WHITE, "CHANGE_DOWN")
+        btn_up = UIElement((CENTER_X, 500 * SCALE_H), f"move up: {pygame.key.name(c.up).upper()}", 25, WHITE, "CHANGE_UP")
+        back_btn = UIElement((CENTER_X, 600 * SCALE_H), "Back to Options", 30, WHITE, GameState.OPTIONS)
 
+        buttons = RenderUpdates(title, btn_left, btn_right, btn_down, btn_up, back_btn)
+
+        while True:
+            mouse_up = False
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return GameState.QUIT
+                if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    mouse_up = True
+
+            self.game.draw_menu_background(screen)
+
+            for button in buttons:
+                ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
+                
+                if ui_action is not None:
+                    if isinstance(ui_action, GameState):
+                        return ui_action
+
+                    button.set_text("PRESS KEY...", 25, YELLOW)
+                   
+                    buttons.draw(screen) 
+                    pygame.display.flip()
+        
+                    new = self.wait_for_key()
+
+                    if not c.key_is_taken(new):
+                        if ui_action == "CHANGE_LEFT":
+                            c.left = new
+                        elif ui_action == "CHANGE_RIGHT":
+                            c.right = new
+                        elif ui_action == "CHANGE_DOWN":
+                            c.down = new
+                        elif ui_action == "CHANGE_UP":
+                            c.up = new
+                    else:
+                        self.show_taken_error(button, screen)
+
+                    btn_left.set_text(f"move left: {pygame.key.name(c.left).upper()}", 25, WHITE)
+                    btn_right.set_text(f"move right: {pygame.key.name(c.right).upper()}", 25, WHITE)
+                    btn_down.set_text(f"move down: {pygame.key.name(c.down).upper()}", 25, WHITE)
+                    btn_up.set_text(f"move up: {pygame.key.name(c.up).upper()}", 25, WHITE)
+
+                button.draw(screen)
+
+            pygame.display.flip()
 

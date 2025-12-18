@@ -204,15 +204,10 @@ class ControlsScreen:
                         return ui_action
 
                     button.set_text("PRESS KEY...", 25, YELLOW)
-                    
-                    # --- DE FIX START HIER ---
-                    # Voordat we het spel pauzeren (wait_for_key), tekenen we 
-                    # geforceerd ALLE knoppen, ook die onder de huidige knop staan.
+                   
                     buttons.draw(screen) 
                     pygame.display.flip()
-                    # --- DE FIX EINDIGT HIER ---
-
-                    # 2. Nu pas wachten we
+        
                     new = self.wait_for_key()
 
                     if not c.key_is_taken(new):
@@ -227,7 +222,6 @@ class ControlsScreen:
                     else:
                         self.show_taken_error(button, screen)
 
-                    # 3. Update alle teksten weer
                     btn_left.set_text(f"move left: {pygame.key.name(c.left).upper()}", 25, WHITE)
                     btn_right.set_text(f"move right: {pygame.key.name(c.right).upper()}", 25, WHITE)
                     btn_down.set_text(f"move down: {pygame.key.name(c.down).upper()}", 25, WHITE)
