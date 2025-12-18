@@ -712,6 +712,10 @@ class LevelSession:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return GameState.QUIT
+                
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        return GameState.TITLE
 
                 if event.type == pygame.VIDEORESIZE:
                     old_w, old_h = SCREEN_WIDTH, SCREEN_HEIGHT
@@ -957,3 +961,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
