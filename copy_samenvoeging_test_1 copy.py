@@ -317,6 +317,9 @@ class SoundScreen:
 
                 elif ui_action == "TOGGLE_SFX":
                     audio.toggle_sfx()
+
+                    if audio.sfx_enabled:
+                        audio.play_sfx(audio_path.button_sound, 0.5)
                     new_effects_text, new_effects_col = self.get_sfx_info()
                     button.set_text(new_effects_text, 30, new_effects_col)
 
@@ -330,7 +333,7 @@ class SoundScreen:
 class VideoScreen:
     def __init__(self, game):
         self.game = game
-        self.available_skins = ["spaceshipp.png", "spaceship.png"]
+        self.available_skins = ["spaceshipp.png", "spaceship.png", "spaceship3.png"]
         self.skin_index = self.available_skins.index(self.game.current_skin) if self.game.current_skin in self.available_skins else 0
 
     def get_skin_text(self):
@@ -366,8 +369,14 @@ class VideoScreen:
             try:
                 preview_base_size = 150
                 skin_corrections = {
+<<<<<<< HEAD
                     "spaceshipp.png": 1.0,
                     "spaceship.png": 1.5
+=======
+                    "spaceshipp.png" : 1.0,
+                    "spaceship.png" : 1.5,
+                    "spaceship3.png" : 1.5
+>>>>>>> cbcc8ddf05aced09e260d74966ac4bb145feb51f
                 }
                 multiplier = skin_corrections.get(self.game.current_skin, 1.0)
                 preview_size = int(preview_base_size * multiplier * MIN_SCALE)
@@ -428,14 +437,25 @@ class LevelSession:
         self.start_speed = 3.5 * SCALE_H
         self.speed_increase = 0.0007 * SCALE_H
         self.max_fall_speed = 14 * SCALE_H
+<<<<<<< HEAD
+=======
+
+        self.splitter_chance = 0.10
+>>>>>>> cbcc8ddf05aced09e260d74966ac4bb145feb51f
         self.split_trigger_margin = 40 * MIN_SCALE
         self.split_child_spread = 3.8 * MIN_SCALE
 
     def load_assets(self):
         base_size = 45
         skin_data = {
+<<<<<<< HEAD
             "spaceshipp.png": {"visual": 1.0, "hitbox": 0.9},
             "spaceship.png": {"visual": 1.5, "hitbox": 0.6}
+=======
+            "spaceshipp.png" : {"visual": 1.0, "hitbox": 0.9},
+            "spaceship.png" : {"visual": 1.5, "hitbox": 0.9},
+            "spaceship3.png" : {"visual" : 1.6, "hitbox": 0.85}
+>>>>>>> cbcc8ddf05aced09e260d74966ac4bb145feb51f
         }
 
         data = skin_data.get(self.game.current_skin, {"visual": 1.0, "hitbox": 0.8})
@@ -484,6 +504,10 @@ class LevelSession:
         size = max(1, int(base_size * MIN_SCALE))
         offset = max(1, int(500 * MIN_SCALE))
 
+<<<<<<< HEAD
+=======
+        
+>>>>>>> cbcc8ddf05aced09e260d74966ac4bb145feb51f
         if level_mode == "side":
             x = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + offset)
             y = random.randint(0, max(1, SCREEN_HEIGHT - size))
@@ -500,8 +524,14 @@ class LevelSession:
         if current_score > 2500 and random.random() < 0.3:
             is_zigzag = True
 
+<<<<<<< HEAD
         drift_strength = 1.2 * MIN_SCALE
 
+=======
+
+        drift_strength = 1.2 * MIN_SCALE
+        
+>>>>>>> cbcc8ddf05aced09e260d74966ac4bb145feb51f
         block_img = None
         if self.meteor_small and self.meteor_medium and self.meteor_large:
             boundary_small = 40 * MIN_SCALE
@@ -513,9 +543,16 @@ class LevelSession:
                 base_img = self.meteor_medium
             else:
                 base_img = self.meteor_large
+<<<<<<< HEAD
 
             block_img = pygame.transform.scale(base_img, (size, size))
 
+=======
+            
+            
+            block_img = pygame.transform.scale(base_img, (size, size))
+        
+>>>>>>> cbcc8ddf05aced09e260d74966ac4bb145feb51f
         return {
             "x": float(x),
             "y": float(y),
@@ -531,7 +568,11 @@ class LevelSession:
     def create_blocks(self, level_mode="down"):
         return [self.make_block(0, level_mode) for _ in range(self.block_count)]
 
+<<<<<<< HEAD
     def respawn_block(self, block, current_score, level_mode):
+=======
+    def respawn_block(self, block,current_score, level_mode):
+>>>>>>> cbcc8ddf05aced09e260d74966ac4bb145feb51f
         block.update(self.make_block(current_score, level_mode))
 
     def maybe_split(self, blocks, block, level_mode, max_allowed_blocks):
@@ -572,7 +613,11 @@ class LevelSession:
                     block["y"] += golf
                 else:
                     block["x"] += golf
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> cbcc8ddf05aced09e260d74966ac4bb145feb51f
             s = block["size"]
             if level_mode == "side":
                 block["x"] += fall_speed
