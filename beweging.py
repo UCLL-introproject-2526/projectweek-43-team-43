@@ -366,7 +366,7 @@ class LevelSession:
         self.split_max_extra = 8
 
         self.bg_scroll = 0
-        self.bg_speed = 2
+        self.bg_speed = 1
         self.current_bg_index = 0
 
     def load_assets(self):
@@ -382,8 +382,8 @@ class LevelSession:
                 img = pygame.image.load(f"images/bgob{i}.png").convert()
                 img = pygame.transform.scale(img, SCREEN_SIZE)
                 self.bg_images.append(img)
-            except Exception as e:
-                print(f"Kon afbeelding images/bgob{i}.png niet laden: {e}")
+            except:
+                print(f"Kon afbeelding images/bgob{i}.png niet laden")
 
         try:
             self.meteor_small = pygame.image.load("images/neptunus.png").convert_alpha()
