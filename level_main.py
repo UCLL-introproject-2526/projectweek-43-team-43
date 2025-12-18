@@ -7,7 +7,7 @@ import audio_path
 from enum import Enum
 from pygame.sprite import Sprite, RenderUpdates
 
-# --- CONSTANTEN & INSTELLINGEN ---
+
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 768
 SCREEN_SIZE = (SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -20,6 +20,8 @@ RED = (255, 0, 0)
 YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
 GAME_BLUE = (0, 100, 255)
+GRAY = (70, 70, 70)
+DARK_GRAY = (40, 40, 40)
 
 BLOCK_COUNT = 10
 PLAYER_RADIUS = 20
@@ -36,7 +38,7 @@ START_SPEED = 3
 SPEED_INCREASE = 0.0005
 MAX_SPEED = 12
 
-FONT_SCORE = None  # wordt gezet na pygame.init()
+FONT_SCORE = None 
 
 
 class GameState(Enum):
@@ -48,10 +50,12 @@ class GameState(Enum):
     VIDEO_SETTINGS = 4
     SOUND = 5
     CONTROLS = 6
+    LEVEL_SELECT = 7
+
 
 
 class Controls:
-    """Houdt keybinds bij (vervangt de globale KEY_LEFT/... variabelen)."""
+    
     def __init__(self):
         self.left = pygame.K_LEFT
         self.right = pygame.K_RIGHT
@@ -70,47 +74,78 @@ class TextFactory:
 
 
 class UIElement(Sprite):
-    def __init__(self, center_position, text, font_size, text_rgb, action=None):
+    def __init__(self, center_position, text, font_size, text_rgb, action=None, box_color=None, box_size=(110, 110)):
         super().__init__()
-        self.mouse_over = False
-        self.action = action
-        self.font_size = font_size
-        self.text_rgb = text_rgb
+        
+     
+        self._mouse_over = False
+        self._action = action
+        
+      
+        self._font_size = font_size
+        self._text_rgb = text_rgb
+        self._box_color = box_color
+        self._box_size = box_size
 
-        default_image = TextFactory.create_surface_with_text(text, font_size, text_rgb)
-        highlighted_image = TextFactory.create_surface_with_text(text, int(font_size * 1.2), text_rgb)
+      
+        self._image_normal = self.create_button_surface(text, font_size, text_rgb, box_color, box_size)
+        
+       
+        hover_bg = DARK_GRAY if box_color else None
+        self._image_hover = self.create_button_surface(text, int(font_size * 1.1), text_rgb, hover_bg, box_size)
 
-        self.images = [default_image, highlighted_image]
-        self.rects = [
-            default_image.get_rect(center=center_position),
-            highlighted_image.get_rect(center=center_position),
-        ]
+        
+        self.image = self._image_normal
+        self.rect = self.image.get_rect(center=center_position)
 
-    def set_text(self, text, font_size, text_rgb):
-        default_image = TextFactory.create_surface_with_text(text, font_size, text_rgb)
-        highlighted_image = TextFactory.create_surface_with_text(text, int(font_size * 1.2), text_rgb)
-        self.images = [default_image, highlighted_image]
-        current_center = self.rects[0].center
-        self.rects = [
-            default_image.get_rect(center=current_center),
-            highlighted_image.get_rect(center=current_center),
-        ]
+    def create_button_surface(self, text, font_size, text_rgb, bg_color, size):
+        
+        font = pygame.freetype.SysFont("Courier", font_size, bold=True)
+        
+        if bg_color:
+            surface = pygame.Surface(size).convert_alpha()
+            surface.fill(bg_color)
+            
+            text_surf, text_rect = font.render(text, fgcolor=text_rgb)
+            text_rect.center = (size[0] // 2, size[1] // 2)
+            surface.blit(text_surf, text_rect)
+            
+            
+            pygame.draw.rect(surface, WHITE, surface.get_rect(), 2)
+            return surface
+        else: 
+            surface, _ = font.render(text, fgcolor=text_rgb)
+            return surface
 
-    @property
-    def image(self):
-        return self.images[1] if self.mouse_over else self.images[0]
+    def get_action(self):
+        
+        return self._action
 
-    @property
-    def rect(self):
-        return self.rects[1] if self.mouse_over else self.rects[0]
+    def set_text(self, text, font_size=None, text_rgb=None):
+        
+        if font_size: self._font_size = font_size
+        if text_rgb: self._text_rgb = text_rgb
+        
+        
+        self._image_normal = self.create_button_surface(text, self._font_size, self._text_rgb, self._box_color, self._box_size)
+        hover_bg = DARK_GRAY if self._box_color else None
+        self._image_hover = self.create_button_surface(text, int(self._font_size * 1.1), self._text_rgb, hover_bg, self._box_size)
+        
+       
+        current_center = self.rect.center
+        self.image = self._image_normal
+        self.rect = self.image.get_rect(center=current_center)
 
     def update(self, mouse_pos, mouse_up):
+       
         if self.rect.collidepoint(mouse_pos):
-            self.mouse_over = True
+            self._mouse_over = True
+            self.image = self._image_hover
             if mouse_up:
-                return self.action
+                return self.get_action()
         else:
-            self.mouse_over = False
+            self._mouse_over = False
+            self.image = self._image_normal
         return None
 
     def draw(self, surface):
@@ -118,7 +153,7 @@ class UIElement(Sprite):
 
 
 class MenuScreenBase:
-    """Basis voor schermen die met UIElement + game_loop draaien."""
+  
     def __init__(self, game):
         self.game = game
 
@@ -127,14 +162,37 @@ class MenuScreenBase:
 
     def run(self, screen) -> GameState:
         return self.game.game_loop(screen, self.build_buttons())
+    
+
+class LevelSelectScreen(MenuScreenBase):
+    def build_buttons(self):
+        title = UIElement((CENTER_X, 150), "LEVELS", 60, WHITE)
+        
+        GRAY = (80, 80, 80)
+        B_SIZE = (120, 120)
+        
+        lvl1 = UIElement((CENTER_X - 225, 400), "1", 60, WHITE, GameState.PLAYING, GRAY, B_SIZE)
+        lvl2 = UIElement((CENTER_X - 75, 400), "2", 60, WHITE, GameState.PLAYING, GRAY, B_SIZE)
+        lvl3 = UIElement((CENTER_X + 75, 400), "3", 60, WHITE, GameState.PLAYING, GRAY, B_SIZE)
+        lvl4 = UIElement((CENTER_X + 225, 400), "4", 60, WHITE, GameState.PLAYING, GRAY, B_SIZE)
+        
+        back_btn = UIElement((CENTER_X, 600), "Terug", 30, WHITE, GameState.TITLE)
+        
+        return RenderUpdates(title, lvl1, lvl2, lvl3, lvl4, back_btn)
+    
+
+
 
 
 class TitleScreen(MenuScreenBase):
     def build_buttons(self):
+        
         start_btn = UIElement((CENTER_X, 250), "Start Game", 50, WHITE, GameState.PLAYING)
-        options_btn = UIElement((CENTER_X, 400), "Options", 50, WHITE, GameState.OPTIONS)
+        levels_btn = UIElement((CENTER_X, 350), "Levels", 50, WHITE, GameState.LEVEL_SELECT) 
+        options_btn = UIElement((CENTER_X, 450), "Options", 50, WHITE, GameState.OPTIONS)    
         quit_btn = UIElement((CENTER_X, 550), "Afsluiten", 50, WHITE, GameState.QUIT)
-        return RenderUpdates(start_btn, options_btn, quit_btn)
+        
+        return RenderUpdates(start_btn, levels_btn, options_btn, quit_btn)
 
 
 class OptionsScreen(MenuScreenBase):
@@ -479,6 +537,7 @@ class Game:
 
         self.screen = pygame.display.set_mode(SCREEN_SIZE)
         pygame.display.set_caption("Dodge Blocks - Full Game")
+    
 
         self._load_menu_background()
 
@@ -488,6 +547,7 @@ class Game:
         self.controls_screen = ControlsScreen(self)
         self.sound_screen = SoundScreen(self)
         self.game_over_screen = GameOverScreen(self)
+        self.level_select_screen = LevelSelectScreen(self)
 
     def _load_menu_background(self):
         try:
@@ -532,6 +592,9 @@ class Game:
             if game_state == GameState.TITLE:
                 audio.play_music(audio_path.menu_music, 0.5)
                 game_state = self.title_screen.run(self.screen)
+
+            elif game_state == GameState.LEVEL_SELECT:
+                game_state = self.level_select_screen.run(self.screen)
 
             elif game_state == GameState.PLAYING:
                 game_state = LevelSession(self).run(self.screen)
