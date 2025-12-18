@@ -211,7 +211,6 @@ def main():
             player_vx += input_x * PLAYER_ACCEL
         else:
             player_vx *= PLAYER_FRICTION
-
         if input_y != 0:
             player_vy += input_y * PLAYER_ACCEL
         else:
