@@ -141,18 +141,18 @@ class LevelSelectScreen:
         if diff == "EASY":
             self.game.active_block_count = 5
             self.game.active_start_speed = 2
-            self.game.active_speed_increase = 0.0003
-            self.game.active_max_blocks = 10
+            self.game.active_speed_increase = 0.0005
+            self.game.active_max_blocks = 17
         elif diff == "MEDIUM":
             self.game.active_block_count = 10
             self.game.active_start_speed = 4
-            self.game.active_speed_increase = 0.0006
-            self.game.active_max_blocks = 15
+            self.game.active_speed_increase = 0.0008
+            self.game.active_max_blocks = 20
         elif diff == "HARD":
             self.game.active_block_count = 15
             self.game.active_start_speed = 6
-            self.game.active_speed_increase = 0.001
-            self.game.active_max_blocks = 25
+            self.game.active_speed_increase = 0.002
+            self.game.active_max_blocks = 30
 
     def run(self, screen):
         self.selected_level = None 
