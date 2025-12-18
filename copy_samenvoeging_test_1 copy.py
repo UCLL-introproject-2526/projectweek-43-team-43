@@ -764,18 +764,22 @@ class LevelSession:
                     continue
 
             for block in blocks:
-                b_rect = pygame.Rect(int(block["x"]), int(block["y"]), block["size"], block["size"])
-                hitbox_margin = int(6 * MIN_SCALE)
-                hitbox = b_rect.inflate(-hitbox_margin, -hitbox_margin)
+                planet_radius = block["size"] / 2
+                hitbox_radius = planet_radius - (6 * MIN_SCALE) 
+                
+                planet_center_x = block["x"] + planet_radius
+                planet_center_y = block["y"] + planet_radius
 
-                if player_rect.colliderect(hitbox) and immunity_timer == 0 and not portal_active:
+                distance = math.hypot(x - planet_center_x, y - planet_center_y)
+
+                if distance < (self.player_radius + hitbox_radius) and immunity_timer == 0 and not portal_active:
                     lives -= 1
                     if lives > 0:
                         audio.play_sfx(audio_path.hit_sound, 0.5)
-                        # De extra render_frame mag ook weg, de loop pakt dit vanzelf op
                         immunity_timer = 90 
                     else:
                         self.game.last_score = score // 10
+                        pygame.mouse.set_visible(True)
                         return GameState.GAMEOVER
                     break
 
