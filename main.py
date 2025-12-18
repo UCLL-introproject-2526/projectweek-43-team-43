@@ -81,7 +81,11 @@ class UIElement(Sprite):
         self.text_rgb = text_rgb
 
         default_image = TextFactory.create_surface_with_text(text, font_size, text_rgb)
-        highlighted_image = TextFactory.create_surface_with_text(text, int(font_size * 1.2), text_rgb)
+
+        if action is None:
+            highlighted_image = default_image
+        else:
+            highlighted_image = TextFactory.create_surface_with_text(text, int(font_size * 1.2), text_rgb)
 
         self.images = [default_image, highlighted_image]
         self.rects = [

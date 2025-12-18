@@ -89,15 +89,18 @@ class UIElement(Sprite):
         new_x = self.ratio_position[0] * SCREEN_WIDTH
         new_y = self.ratio_position[1] * SCREEN_HEIGHT
 
-        default_image = TextFactory.create_surface_with_text(text, int(font_size * 1.2), text_rgb)
+        default_image = TextFactory.create_surface_with_text(self.text, self.font_size, self.text_rgb)
 
-
+        if self.action is None:
+            highlighted_image = default_image
+        else:
+            highlighted_image = TextFactory.create_surface_with_text(self.text, int(self.font_size * 1.2), self.text_rgb)
 
         self.images = [default_image, highlighted_image]
         self.rects = [
-            default_image.get_rect(center = (new_x, new_y)),
-            highlighted_image.get_rect(center = (new_x, new_y)),
-        ]
+            default_image.get_rect(center=(new_x, new_y)),
+            highlighted_image.get_rect(center=(new_x, new_y)),
+        ]  
 
     def set_text(self, text, font_size, text_rgb):
         default_image = TextFactory.create_surface_with_text(text, font_size, text_rgb)
