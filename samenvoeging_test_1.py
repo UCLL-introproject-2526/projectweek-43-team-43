@@ -425,6 +425,7 @@ class LevelSession:
         self.split_child_spread = 0
         self.split_max_extra = 8
         self.apply_scaling()
+        self.shake_intensity = 0
 
     def apply_scaling(self):
         self.player_radius = max(1, int(20 * MIN_SCALE))
@@ -621,20 +622,29 @@ class LevelSession:
             blocks.append(self.make_block(current_score, level_mode))
 
     def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active, player_vx):
-        surface.fill(BLACK)
+        
+        offset_x = 0
+        offset_y = 0
+        if self.shake_intensity > 0:
+            offset_x = random.randint(-self.shake_intensity, self.shake_intensity)
+            offset_y = random.randint(-self.shake_intensity, self.shake_intensity)
+            self.shake_intensity = max(0, self.shake_intensity - 1)
+        canvas = pygame.Surface(SCREEN_SIZE)
+        canvas.fill(BLACK)
+
         if self.bg_images:
             self.bg_scroll += self.bg_speed
             if self.bg_scroll >= SCREEN_HEIGHT:
                 self.bg_scroll = 0
                 self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
             next_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
-            surface.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
-            surface.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
+            canvas.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
+            canvas.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
         elif self.background_image:
-            surface.blit(self.background_image, (0, 0))
+            canvas.blit(self.background_image, (0, 0))
 
         if portal_rect and self.portal_image:
-            surface.blit(self.portal_image, portal_rect)
+            V.blit(self.portal_image, portal_rect)
 
         for b in blocks:
             size = b["size"]
@@ -656,7 +666,7 @@ class LevelSession:
                     b["image"] = pygame.transform.scale(base_img, (size, size))
 
             if b.get("image"):
-                surface.blit(b["image"], (bx, by))
+                canvas.blit(b["image"], (bx, by))
             else:
                 pygame.draw.rect(surface, WHITE, (bx, by, size, size))
 
@@ -672,9 +682,11 @@ class LevelSession:
                 player_rect = rotated_player.get_rect(center=(int(px), int(py)))
 
 
-                surface.blit(rotated_player, player_rect)
+                canvas.blit(rotated_player, player_rect)
             else:
                 pygame.draw.circle(surface, GAME_BLUE, (int(px), int(py)), self.player_radius)
+            
+        surface.blit(canvas, (offset_x, offset_y))
 
         score_x = SCREEN_WIDTH - max(1, int(200 * MIN_SCALE))
         score_y = max(0, int(20 * MIN_SCALE))
@@ -846,6 +858,7 @@ class LevelSession:
 
                 if distance < (self.player_radius + hitbox_radius) and immunity_timer == 0 and not portal_active:
                     lives -= 1
+                    self.shake_intensity = 15
                     if lives > 0:
                         audio.play_sfx(audio_path.hit_sound, 0.5)
                         immunity_timer = 90 
