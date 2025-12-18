@@ -346,15 +346,22 @@ class VideoScreen:
             self.game.draw_menu_background(screen)
 
             try:
-                preview_size = max(1, int(120 * MIN_SCALE))
+                preview_base_size = 150
+                skin_corrections = {
+                    "spaceshipp.png" : 1.0,
+                    "spaceship.png" : 1.5
+                }
+                multiplier = skin_corrections.get(self.game.current_skin, 1.0)
+                preview_size = int(preview_base_size * multiplier * MIN_SCALE)
+
                 preview_path = f"images/{self.game.current_skin}"
                 preview_img = pygame.image.load(preview_path).convert_alpha()
                 preview_img = pygame.transform.scale(preview_img, (preview_size, preview_size))
-                preview_rect = preview_img.get_rect(center=(int(CENTER_X), int(450 * SCALE_H)))
+                
+                preview_rect = preview_img.get_rect(center=(int(SCREEN_WIDTH * 0.5), int(SCREEN_HEIGHT * 0.55)))
                 screen.blit(preview_img, preview_rect)
             except:
-                pygame.draw.circle(screen, YELLOW, (int(CENTER_X), int(450 * SCALE_H)), max(1, int(40 * MIN_SCALE)))
-
+                pygame.draw.circle(screen, YELLOW, (int(SCREEN_WIDTH * 0.5), int(SCREEN_HEIGHT * 0.55)), int(40 * MIN_SCALE))
             for button in buttons:
                 ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
 
@@ -398,9 +405,20 @@ class LevelSession:
         self.split_max_extra = 8
 
     def load_assets(self):
+        base_size = 45
+        skin_data = {
+            "spaceshipp.png" : {"visual": 1.0, "hitbox": 0.9},
+            "spaceship.png" : {"visual": 1.5, "hitbox": 0.6}
+        }
+
+        data = skin_data.get(self.game.current_skin, {"visual": 1.0, "hitbox": 0.8})
+
+        final_pixel_size = int(base_size * data["visual"] * MIN_SCALE)
+
+        self.player_radius = int((final_pixel_size // 2) * data["hitbox"])
         try:
             self.player_image = pygame.image.load(f"images/{self.game.current_skin}").convert_alpha()
-            self.player_image = pygame.transform.scale(self.player_image, (self.player_radius * 2, self.player_radius * 2))
+            self.player_image = pygame.transform.scale(self.player_image, (final_pixel_size, final_pixel_size))
         except:
             self.player_image = None
 
@@ -420,8 +438,8 @@ class LevelSession:
             self.meteor_large = None
 
         try:
+            heart_size = int(30 * MIN_SCALE)
             self.heart_image = pygame.image.load("images/lives.png").convert_alpha()
-            heart_size = max(1, int(30 * MIN_SCALE))
             self.heart_image = pygame.transform.scale(self.heart_image, (heart_size, heart_size))
         except:
             self.heart_image = None
