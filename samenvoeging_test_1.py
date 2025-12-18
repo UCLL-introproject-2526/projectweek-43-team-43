@@ -1,322 +1,866 @@
 import pygame
+import pygame.freetype
 import random
 import sys
 import math
+import audio
+import audio_path
+from enum import Enum
+from pygame.sprite import Sprite, RenderUpdates
 
 pygame.init()
 
-info = pygame.display.Info()
-screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
-W, H = screen.get_size()
+REF_WIDTH = 1024
+REF_HEIGHT = 768
 
-SCALE = H / 768.0
+SCREEN_WIDTH = REF_WIDTH
+SCREEN_HEIGHT = REF_HEIGHT
+SCREEN_SIZE = (SCREEN_WIDTH, SCREEN_HEIGHT)
+CENTER_X = SCREEN_WIDTH / 2
+CENTER_Y = SCREEN_HEIGHT / 2
 
+SCALE_W = 1
+SCALE_H = 1
+MIN_SCALE = 1
+
+def recalc_display_metrics(screen):
+    global SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_SIZE, CENTER_X, CENTER_Y
+    global SCALE_W, SCALE_H, MIN_SCALE, FONT_SCORE
+    SCREEN_WIDTH, SCREEN_HEIGHT = screen.get_size()
+    SCREEN_SIZE = (SCREEN_WIDTH, SCREEN_HEIGHT)
+    CENTER_X = SCREEN_WIDTH / 2
+    CENTER_Y = SCREEN_HEIGHT / 2
+    SCALE_W = SCREEN_WIDTH / REF_WIDTH
+    SCALE_H = SCREEN_HEIGHT / REF_HEIGHT
+    MIN_SCALE = min(SCALE_W, SCALE_H)
+
+    FONT_SCORE = pygame.font.SysFont("Arial", max(1, int(30 * MIN_SCALE)), bold = True)
+
+BLUE = (106, 159, 181)
+WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
-WHITE = (255, 255, 255)
-GREEN = (0, 255, 0)
 YELLOW = (255, 255, 0)
+GREEN = (0, 255, 0)
+GAME_BLUE = (0, 100, 255)
 
-BLOCK_COUNT = 4
-PLAYER_RADIUS = int(20 * SCALE)
+FONT_SCORE = None
 
-PLAYER_MAX_SPEED = 11 * SCALE
-PLAYER_ACCEL = 1.8 * SCALE
-PLAYER_FRICTION = 0.82 
+class GameState(Enum):
+    QUIT = -1
+    TITLE = 0
+    PLAYING = 1
+    GAMEOVER = 2
+    OPTIONS = 3
+    VIDEO = 4
+    SOUND = 5
+    CONTROLS = 6
 
-START_SPEED = 3.5 * SCALE
-SPEED_INCREASE = 0.0007 * SCALE
-MAX_FALL_SPEED = 14 * SCALE
+class Controls:
+    def __init__(self):
+        self.left = pygame.K_LEFT
+        self.right = pygame.K_RIGHT
+        self.up = pygame.K_UP
+        self.down = pygame.K_DOWN
 
-SPLITTER_CHANCE = 0.22
-SPLIT_TRIGGER_MARGIN = 40 * SCALE
-SPLIT_CHILD_SPREAD = 3.8 * SCALE
-SPLIT_MAX_EXTRA = 8
+    def key_is_taken(self, new_key: int) -> bool:
+        return new_key in [self.left, self.right, self.up, self.down]
 
-FONT_GAME_OVER = pygame.font.SysFont("Arial", int(72 * SCALE), bold=True)
-FONT_RETRY = pygame.font.SysFont("Arial", int(30 * SCALE))
-FONT_SCORE = pygame.font.SysFont("Arial", int(30 * SCALE), bold=True)
+class TextFactory:
+    @staticmethod
+    def create_surface_with_text(text: str, font_size: int, text_rgb):
+        scaled_size = max(1, int(font_size * MIN_SCALE))
+        font = pygame.freetype.SysFont("Courier", scaled_size, bold=True)
+        surface, _ = font.render(text=text, fgcolor=text_rgb, bgcolor=None)
+        return surface.convert_alpha()
 
-def make_block(level_mode="down"):
-    base_min = int(20 * SCALE)
-    base_max = int(65 * SCALE)
-    size = random.randint(base_min, base_max)
+class UIElement(Sprite):
+    def __init__(self, ratio_position, text, font_size, text_rgb, action=None):
+        super().__init__()
+        self.ratio_position = ratio_position
+        self.text = text
+        self.font_size = font_size
+        self.text_rgb = text_rgb
+        self.action = action
+        self.mouse_over = False
+        self.refresh_scaling()
 
-    if level_mode == "side":
-        x = random.randint(W, W + int(500 * SCALE))
-        y = random.randint(0, H - size)
-    elif level_mode == "up":
-        x = random.randint(0, W - size)
-        y = random.randint(H, H + int(500 * SCALE))
-    else:
-        x = random.randint(0, W - size)
-        y = random.randint(int(-500 * SCALE), 0)
+    def refresh_scaling(self):
+        new_x = self.ratio_position[0] * SCREEN_WIDTH
+        new_y = self.ratio_position[1] * SCREEN_HEIGHT
 
-    is_splitter = (random.random() < SPLITTER_CHANCE)
-    drift_strength = 1.2 * SCALE
-    
-    return {
-        "x": float(x),
-        "y": float(y),
-        "size": size,
-        "splitter": is_splitter,
-        "split_done": False,
-        "vx": random.uniform(-drift_strength, drift_strength),
-        "vy": random.uniform(-0.5 * SCALE, 0.5 * SCALE),
-    }
+        default_image = TextFactory.create_surface_with_text(self.text, self.font_size, self.text_rgb)
 
-def create_blocks(level_mode="down"):
-    return [make_block(level_mode) for _ in range(BLOCK_COUNT)]
-
-def respawn_block(block, level_mode):
-    block.update(make_block(level_mode))
-
-def maybe_split(blocks, block, level_mode, fall_speed, max_allowed_blocks):
-    if not block["splitter"] or block["split_done"]:
-        return
-    if len(blocks) >= max_allowed_blocks:
-        return
-
-    if level_mode == "side":
-        mid_x = W / 2
-        if abs(block["x"] - mid_x) > SPLIT_TRIGGER_MARGIN: return
-    else:
-        mid_y = H / 2
-        if abs(block["y"] - mid_y) > SPLIT_TRIGGER_MARGIN: return
-
-    block["split_done"] = True
-    parent_size = block["size"]
-    child_size = max(int(18 * SCALE), parent_size // 2)
-    cx, cy = block["x"] + parent_size / 4, block["y"] + parent_size / 4
-
-    if level_mode == "side":
-        c1 = {"x": cx, "y": cy, "size": child_size, "splitter": False, "split_done": True, "vx": block["vx"], "vy": -SPLIT_CHILD_SPREAD}
-        c2 = {"x": cx, "y": cy, "size": child_size, "splitter": False, "split_done": True, "vx": block["vx"], "vy": +SPLIT_CHILD_SPREAD}
-    else:
-        c1 = {"x": cx, "y": cy, "size": child_size, "splitter": False, "split_done": True, "vx": -SPLIT_CHILD_SPREAD, "vy": block["vy"]}
-        c2 = {"x": cx, "y": cy, "size": child_size, "splitter": False, "split_done": True, "vx": +SPLIT_CHILD_SPREAD, "vy": block["vy"]}
-
-    blocks.extend([c1, c2])
-
-def update_blocks(blocks, fall_speed, current_score, level_mode):
-    extra_planeten = (current_score // 800) 
-    max_allowed = BLOCK_COUNT + extra_planeten + SPLIT_MAX_EXTRA
-
-    for block in blocks:
-        s = block["size"]
-        if level_mode == "side":
-            block["x"] += fall_speed
-            block["y"] += block["vy"]
-            block["x"] += block["vx"]
-            maybe_split(blocks, block, level_mode, fall_speed, max_allowed)
-            if block["x"] < -s: respawn_block(block, level_mode)
+        if self.action is None:
+            highlighted_image = default_image
         else:
-            block["y"] += fall_speed
-            block["x"] += block["vx"]
-            block["y"] += block["vy"]
-            maybe_split(blocks, block, level_mode, fall_speed, max_allowed)
-            if fall_speed > 0 and block["y"] > H: respawn_block(block, "down")
-            elif fall_speed < 0 and block["y"] < -s: respawn_block(block, "up")
+            highlighted_image = TextFactory.create_surface_with_text(self.text, int(self.font_size * 1.2), self.text_rgb)
 
-    if len(blocks) < BLOCK_COUNT + extra_planeten:
-        blocks.append(make_block(level_mode))
+        self.images = [default_image, highlighted_image]
+        self.rects = [
+            default_image.get_rect(center=(new_x, new_y)),
+            highlighted_image.get_rect(center=(new_x, new_y)),
+        ]  
 
-def show_game_over(surface, final_score):
-    waiting = True
-    while waiting:
-        surface.fill(BLACK)
-        t1 = FONT_GAME_OVER.render("GAME OVER", True, RED)
-        t2 = FONT_RETRY.render(f"Score: {final_score // 10}", True, WHITE)
-        t3 = FONT_RETRY.render("Druk SPATIE om te herstarten", True, GREEN)
-        t4 = FONT_RETRY.render("Druk ESC om te stoppen", True, YELLOW)
-        
-        cx, cy = W // 2, H // 2
-        surface.blit(t1, t1.get_rect(center=(cx, cy - int(80 * SCALE))))
-        surface.blit(t2, t2.get_rect(center=(cx, cy)))
-        surface.blit(t3, t3.get_rect(center=(cx, cy + int(80 * SCALE))))
-        surface.blit(t4, t4.get_rect(center=(cx, cy + int(140 * SCALE))))
+    def set_text(self, text, font_size, text_rgb):
+        default_image = TextFactory.create_surface_with_text(text, font_size, text_rgb)
+        highlighted_image = TextFactory.create_surface_with_text(text, int(font_size * 1.2), text_rgb)
+        self.images = [default_image, highlighted_image]
+        current_center = self.rects[0].center
+        self.rects = [
+            default_image.get_rect(center=current_center),
+            highlighted_image.get_rect(center=current_center),
+        ]
 
+    @property
+    def image(self):
+        return self.images[1] if self.mouse_over else self.images[0]
+
+    @property
+    def rect(self):
+        return self.rects[1] if self.mouse_over else self.rects[0]
+
+    def update(self, mouse_pos, mouse_up):
+        if self.rect.collidepoint(mouse_pos):
+            self.mouse_over = True
+            if mouse_up:
+                return self.action
+        else:
+            self.mouse_over = False
+        return None
+
+    def draw(self, surface):
+        surface.blit(self.image, self.rect)
+
+class MenuScreenBase:
+    def __init__(self, game):
+        self.game = game
+
+    def build_buttons(self) -> RenderUpdates:
+        raise NotImplementedError
+
+    def run(self, screen) -> GameState:
+        return self.game.game_loop(screen, self.build_buttons())
+
+class TitleScreen(MenuScreenBase):
+    def build_buttons(self):
+        start_btn = UIElement((0.5, 0.20), "Start Game", 50, WHITE, GameState.PLAYING)
+        options_btn = UIElement((0.5, 0.50), "Options", 50, WHITE, GameState.OPTIONS)
+        quit_btn = UIElement((0.5, 0.80), "Afsluiten", 50, WHITE, GameState.QUIT)
+        return RenderUpdates(start_btn, options_btn, quit_btn)
+
+class OptionsScreen(MenuScreenBase):
+    def build_buttons(self):
+        title = UIElement((0.5, 0.2), "SETTINGS", 70, WHITE)
+        sound_btn = UIElement((0.5, 0.35), "Sound", 40, WHITE, GameState.SOUND)
+        controls_btn = UIElement((0.5, 0.5), "CONTROLS", 40, WHITE, GameState.CONTROLS)
+        video_btn = UIElement((0.5, 0.65), "VIDEO", 40, WHITE, GameState.VIDEO)
+        back_btn = UIElement((0.5, 0.8), "Back", 40, WHITE, GameState.TITLE)
+        return RenderUpdates(title, back_btn, controls_btn, sound_btn, video_btn)
+
+class GameOverScreen(MenuScreenBase):
+    def build_buttons(self):
+        tekst_btn = UIElement((0.5, 0.2), "GAME OVER", 60, RED)
+        score_display = UIElement((0.5, 0.35), f"Jouw Score: {self.game.last_score}", 40, YELLOW)
+        restart_btn = UIElement((0.5, 0.5), "Opnieuw spelen", 30, WHITE, GameState.PLAYING)
+        menu_btn = UIElement((0.5, 0.65), "Hoofdmenu", 30, WHITE, GameState.TITLE)
+        return RenderUpdates(tekst_btn, score_display, restart_btn, menu_btn)
+
+class ControlsScreen:
+    def __init__(self, game):
+        self.game = game
+
+    @staticmethod
+    def wait_for_key():
+        while True:
+            for event in pygame.event.get():
+                if event.type == pygame.KEYDOWN:
+                    return event.key
+
+    @staticmethod
+    def show_taken_error(button: UIElement, screen):
+        font_size = max(1, int(25 * MIN_SCALE))
+        font = pygame.freetype.SysFont("Arial", font_size, bold=True)
+        text_surf, text_rect = font.render("KEY ALREADY TAKEN!", fgcolor=RED, bgcolor=None)
+        x = button.rect.right + int(20 * MIN_SCALE)
+        y = int(button.rect.centery - (text_rect.height / 2))
+        screen.blit(text_surf, (x, y))
         pygame.display.flip()
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit(); sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE: waiting = False
-                if event.key == pygame.K_ESCAPE: pygame.quit(); sys.exit()
+        pygame.time.delay(1000)
 
-def render_frame(surface, blocks, px, py, score, lives, immunity, bg_img, imgs, p_img, portal_rect, portal_img):
-    surface.fill(BLACK)
-    surface.blit(bg_img, (0, 0))
+    def run(self, screen) -> GameState:
+        c = self.game.controls
+        title = UIElement((0.5, 0.2), "CLICK TO CHANGE KEYS", 50, WHITE)
+        btn_left = UIElement((0.5, 0.35), f"move left: {pygame.key.name(c.left).upper()}", 25, WHITE, "CHANGE_LEFT")
+        btn_right = UIElement((0.5, 0.45), f"move right: {pygame.key.name(c.right).upper()}", 25, WHITE, "CHANGE_RIGHT")
+        btn_down = UIElement((0.5, 0.55), f"move down: {pygame.key.name(c.down).upper()}", 25, WHITE, "CHANGE_DOWN")
+        btn_up = UIElement((0.5, 0.65), f"move up: {pygame.key.name(c.up).upper()}", 25, WHITE, "CHANGE_UP")
+        back_btn = UIElement((0.5, 0.8), "Back to Options", 30, WHITE, GameState.OPTIONS)
+        buttons = RenderUpdates(title, btn_left, btn_right, btn_down, btn_up, back_btn)
 
-    if portal_rect and portal_img:
-        surface.blit(portal_img, portal_rect)
+        while True:
+            mouse_up = False
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return GameState.QUIT
+                if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    mouse_up = True
 
-    for b in blocks:
-        if b["size"] < 40 * SCALE: img = imgs[0]
-        elif b["size"] < 50 * SCALE: img = imgs[1]
-        else: img = imgs[2]
-        surface.blit(pygame.transform.scale(img, (b["size"], b["size"])), (b["x"], b["y"]))
+            self.game.draw_menu_background(screen)
+
+            for button in buttons:
+                ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
+                
+                if ui_action is not None:
+                    if isinstance(ui_action, GameState):
+                        return ui_action
+
+                    button.set_text("PRESS KEY...", 25, YELLOW)
+                   
+                    buttons.draw(screen) 
+                    pygame.display.flip()
         
-        if b["splitter"] and not b["split_done"]:
-             pygame.draw.circle(surface, YELLOW, (int(b["x"])+b["size"]//2, int(b["y"])+b["size"]//2), b["size"]//2 + int(8 * SCALE), 3)
+                    new = self.wait_for_key()
 
-    if immunity == 0 or (immunity // 5) % 2 == 0:
-        surface.blit(p_img, p_img.get_rect(center=(int(px), int(py))))
+                    if not c.key_is_taken(new):
+                        if ui_action == "CHANGE_LEFT":
+                            c.left = new
+                        elif ui_action == "CHANGE_RIGHT":
+                            c.right = new
+                        elif ui_action == "CHANGE_DOWN":
+                            c.down = new
+                        elif ui_action == "CHANGE_UP":
+                            c.up = new
+                    else:
+                        self.show_taken_error(button, screen)
 
-    score_offset = int(180 * SCALE)
-    score_y = int(20 * SCALE)
-    surface.blit(FONT_SCORE.render(f"Score: {score // 10}", True, WHITE), (W - score_offset, score_y))
+                    btn_left.set_text(f"move left: {pygame.key.name(c.left).upper()}", 25, WHITE)
+                    btn_right.set_text(f"move right: {pygame.key.name(c.right).upper()}", 25, WHITE)
+                    btn_down.set_text(f"move down: {pygame.key.name(c.down).upper()}", 25, WHITE)
+                    btn_up.set_text(f"move up: {pygame.key.name(c.up).upper()}", 25, WHITE)
 
-def main():
-    pygame.display.set_caption("Space Dodger Fullscreen")
-    clock = pygame.time.Clock()
+                button.draw(screen)
 
-    p_img = pygame.image.load("images/spaceshipp.png").convert_alpha()
-    p_img = pygame.transform.scale(p_img, (PLAYER_RADIUS * 2, PLAYER_RADIUS * 2))
-    
-    bg_img = pygame.image.load("images/galaxy.png").convert()
-    bg_img = pygame.transform.scale(bg_img, (W, H))
-    
-    met_s = pygame.image.load("images/neptunus.png").convert_alpha()
-    met_m = pygame.image.load("images/mars.png").convert_alpha()
-    met_l = pygame.image.load("images/jupiter.png").convert_alpha()
-    
-    heart_size = int(30 * SCALE)
-    heart_img = pygame.image.load("images/lives.png").convert_alpha()
-    heart_img = pygame.transform.scale(heart_img, (heart_size, heart_size))
-    
-    portal_w, portal_h = int(200 * SCALE), int(40 * SCALE)
-    portal_img = pygame.image.load("images/portal.png").convert_alpha()
-    portal_img = pygame.transform.scale(portal_img, (portal_w, portal_h))
+            pygame.display.flip()
 
-    imgs = [met_s, met_m, met_l]
+class SoundScreen:
+    def __init__(self, game):
+        self.game = game
 
-    x, y = W // 2, H - int(100 * SCALE)
-    player_vx = 0
-    player_vy = 0
+    @staticmethod
+    def get_music_info():
+        if audio.music_enabled:
+            return "Music: ON", GREEN
+        return "Music: OFF", RED
 
-    blocks = create_blocks("down")
-    fall_speed = START_SPEED
-    score, lives, immunity_timer = 0, 3, 0
-    level_flipped, level_side = False, False
+    @staticmethod
+    def get_sfx_info():
+        if audio.sfx_enabled:
+            return "Effects: ON", GREEN
+        return "Effects: OFF", RED
 
-    running = True
-    while running:
-        clock.tick(60)
-        
-        portal1 = ((score // 10) >= 250 and not level_flipped)
-        portal2 = ((score // 10) >= 500 and level_flipped and not level_side)
-        portal_active = portal1 or portal2
-        if immunity_timer > 0: immunity_timer -= 1
+    def run(self, screen) -> GameState:
+        music_text, music_col = self.get_music_info()
+        effects_text, effects_col = self.get_sfx_info()
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT: running = False
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE: running = False
-        
-        keys = pygame.key.get_pressed()
-        input_x = 0
-        input_y = 0
-        
-        if not portal_active:
-            if keys[pygame.K_LEFT]:  input_x -= 1
-            if keys[pygame.K_RIGHT]: input_x += 1
-            if keys[pygame.K_UP]:    input_y -= 1
-            if keys[pygame.K_DOWN]:  input_y += 1
+        title = UIElement((0.5, 0.2), "SOUNDS", 50, WHITE)
+        music_btn = UIElement((0.5, 0.4), music_text, 30, music_col, "TOGGLE_MUSIC")
+        effects_btn = UIElement((0.5, 0.6), effects_text, 30, effects_col, "TOGGLE_SFX")
+        back_btn = UIElement((0.5, 0.8), "Back to Options", 30, WHITE, GameState.OPTIONS)
+        buttons = RenderUpdates(title, music_btn, effects_btn, back_btn)
 
-        if input_x != 0:
-            player_vx += input_x * PLAYER_ACCEL
+        while True:
+            mouse_up = False
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return GameState.QUIT
+                
+                if event.type == pygame.VIDEORESIZE:
+                    self.game.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
+                    recalc_display_metrics(self.game.screen)
+                    self.game._load_menu_background()
+                    for button in buttons:
+                        button.refresh_scaling()
+
+                if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    mouse_up = True
+
+            self.game.draw_menu_background(screen)
+
+            for button in buttons:
+                ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
+
+                if ui_action == "TOGGLE_MUSIC":
+                    audio.toggle_music()
+                    new_music_text, new_music_col = self.get_music_info()
+                    button.set_text(new_music_text, 30, new_music_col)
+                    if audio.music_enabled:
+                        audio.play_music(audio_path.menu_music, 0.5)
+
+                elif ui_action == "TOGGLE_SFX":
+                    audio.toggle_sfx()
+                    new_effects_text, new_effects_col = self.get_sfx_info()
+                    button.set_text(new_effects_text, 30, new_effects_col)
+                    if audio.sfx_enabled:
+                        audio.play_sfx(audio_path.hit_sound, 0.5)
+
+                elif isinstance(ui_action, GameState):
+                    return ui_action
+
+                button.draw(screen)
+
+            pygame.display.flip()
+
+class VideoScreen:
+    def __init__(self, game):
+        self.game = game
+        self.available_skins = ["spaceshipp.png", "spaceship.png"]
+        self.skin_index = self.available_skins.index(self.game.current_skin) if self.game.current_skin in self.available_skins else 0
+
+    def get_skin_text(self):
+        name = self.available_skins[self.skin_index].split(".")[0].capitalize()
+        return f"Skin: {name}"
+
+    def run(self, screen) -> GameState:
+        title = UIElement((0.5, 0.2), "VIDEO", 50, WHITE)
+        skin_btn = UIElement((0.5, 0.4), self.get_skin_text(), 35, YELLOW, "CHANGE_SKIN")
+        back_btn = UIElement((0.5, 0.8), "Back to Options", 30, WHITE, GameState.OPTIONS)
+        buttons = RenderUpdates(title, skin_btn, back_btn)
+
+        while True:
+            mouse_up = False
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return GameState.QUIT
+                
+                if event.type == pygame.VIDEORESIZE:
+                    self.game.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
+                    recalc_display_metrics(self.game.screen)
+                    self.game._load_menu_background()
+                    for button in buttons:
+                        button.refresh_scaling()
+
+                if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    mouse_up = True
+
+            self.game.draw_menu_background(screen)
+
+            try:
+                preview_size = max(1, int(120 * MIN_SCALE))
+                preview_path = f"images/{self.game.current_skin}"
+                preview_img = pygame.image.load(preview_path).convert_alpha()
+                preview_img = pygame.transform.scale(preview_img, (preview_size, preview_size))
+                preview_rect = preview_img.get_rect(center=(int(CENTER_X), int(450 * SCALE_H)))
+                screen.blit(preview_img, preview_rect)
+            except:
+                pygame.draw.circle(screen, YELLOW, (int(CENTER_X), int(450 * SCALE_H)), max(1, int(40 * MIN_SCALE)))
+
+            for button in buttons:
+                ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
+
+                if ui_action == "CHANGE_SKIN":
+                    self.skin_index = (self.skin_index + 1) % len(self.available_skins)
+                    self.game.current_skin = self.available_skins[self.skin_index]
+                    button.set_text(self.get_skin_text(), 35, YELLOW)
+                    audio.play_sfx(audio_path.hit_sound, 0.2)
+
+                elif isinstance(ui_action, GameState):
+                    return ui_action
+
+                button.draw(screen)
+
+            pygame.display.flip()
+
+class LevelSession:
+    def __init__(self, game):
+        self.game = game
+        self.player_image = None
+        self.background_image = None
+        self.meteor_small = None
+        self.meteor_medium = None
+        self.meteor_large = None
+        self.heart_image = None
+        self.portal_image = None
+
+        self.block_count = 4
+        self.player_radius = max(1, int(20 * MIN_SCALE))
+        self.player_max_speed = 11 * MIN_SCALE
+        self.player_accel = 1.8 * MIN_SCALE
+        self.player_friction = 0.82
+
+        self.start_speed = 3.5 * SCALE_H
+        self.speed_increase = 0.0007 * SCALE_H
+        self.max_fall_speed = 14 * SCALE_H
+
+        self.splitter_chance = 0.22
+        self.split_trigger_margin = 40 * MIN_SCALE
+        self.split_child_spread = 3.8 * MIN_SCALE
+        self.split_max_extra = 8
+
+    def load_assets(self):
+        try:
+            self.player_image = pygame.image.load(f"images/{self.game.current_skin}").convert_alpha()
+            self.player_image = pygame.transform.scale(self.player_image, (self.player_radius * 2, self.player_radius * 2))
+        except:
+            self.player_image = None
+
+        try:
+            self.background_image = pygame.image.load("images/galaxy.png").convert()
+            self.background_image = pygame.transform.scale(self.background_image, SCREEN_SIZE)
+        except:
+            self.background_image = None
+
+        try:
+            self.meteor_small = pygame.image.load("images/neptunus.png").convert_alpha()
+            self.meteor_medium = pygame.image.load("images/mars.png").convert_alpha()
+            self.meteor_large = pygame.image.load("images/jupiter.png").convert_alpha()
+        except:
+            self.meteor_small = None
+            self.meteor_medium = None
+            self.meteor_large = None
+
+        try:
+            self.heart_image = pygame.image.load("images/lives.png").convert_alpha()
+            heart_size = max(1, int(30 * MIN_SCALE))
+            self.heart_image = pygame.transform.scale(self.heart_image, (heart_size, heart_size))
+        except:
+            self.heart_image = None
+
+        try:
+            self.portal_image = pygame.image.load("images/portal.png").convert_alpha()
+            portal_w = max(1, int(200 * MIN_SCALE))
+            portal_h = max(1, int(40 * MIN_SCALE))
+            self.portal_image = pygame.transform.scale(self.portal_image, (portal_w, portal_h))
+        except:
+            self.portal_image = None
+
+    def make_block(self, level_mode="down"):
+        base_size = random.randint(20, 65)
+        size = max(1, int(base_size * MIN_SCALE))
+        offset = max(1, int(500 * MIN_SCALE))
+
+        # ... (positie logica blijft hetzelfde als je had) ...
+        if level_mode == "side":
+            x = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + offset)
+            y = random.randint(0, max(1, SCREEN_HEIGHT - size))
+        elif level_mode == "up":
+            x = random.randint(0, max(1, SCREEN_WIDTH - size))
+            y = random.randint(SCREEN_HEIGHT, SCREEN_HEIGHT + offset)
         else:
-            player_vx *= PLAYER_FRICTION
+            x = random.randint(0, max(1, SCREEN_WIDTH - size))
+            y = random.randint(-offset, 0)
 
-        if input_y != 0:
-            player_vy += input_y * PLAYER_ACCEL
-        else:
-            player_vy *= PLAYER_FRICTION
-
-        speed = math.sqrt(player_vx**2 + player_vy**2)
-        if speed > PLAYER_MAX_SPEED:
-            scale_v = PLAYER_MAX_SPEED / speed
-            player_vx *= scale_v
-            player_vy *= scale_v
+        is_splitter = (random.random() < self.splitter_chance)
+        drift_strength = 1.2 * MIN_SCALE
         
-        if abs(player_vx) < 0.1: player_vx = 0
-        if abs(player_vy) < 0.1: player_vy = 0
+        # --- OPTIMALISATIE START ---
+        # Kies en schaal de afbeelding HIER, één keer bij het aanmaken
+        block_img = None
+        if self.meteor_small and self.meteor_medium and self.meteor_large:
+            boundary_small = 40 * MIN_SCALE
+            boundary_medium = 50 * MIN_SCALE
+            
+            if size < boundary_small:
+                base_img = self.meteor_small
+            elif size < boundary_medium:
+                base_img = self.meteor_medium
+            else:
+                base_img = self.meteor_large
+            
+            # Schaal de afbeelding nu en sla hem op
+            block_img = pygame.transform.scale(base_img, (size, size))
+        # --- OPTIMALISATIE EINDE ---
 
-        x += player_vx
-        y += player_vy
+        return {
+            "x": float(x),
+            "y": float(y),
+            "size": size,
+            "image": block_img,  # We slaan de afbeelding op in het blok
+            "splitter": is_splitter,
+            "split_done": False,
+            "vx": random.uniform(-drift_strength, drift_strength),
+            "vy": random.uniform(-0.5 * MIN_SCALE, 0.5 * MIN_SCALE),
+        }
 
-        score += 1
+    def create_blocks(self, level_mode="down"):
+        return [self.make_block(level_mode) for _ in range(self.block_count)]
 
-        if not level_flipped:
-            fall_speed = min(START_SPEED + (score * SPEED_INCREASE), MAX_FALL_SPEED)
-            level_mode = "down"
-        elif level_flipped and not level_side:
-            fall_speed = max(-START_SPEED - (score * SPEED_INCREASE), -MAX_FALL_SPEED)
-            level_mode = "up"
+    def respawn_block(self, block, level_mode):
+        block.update(self.make_block(level_mode))
+
+    def maybe_split(self, blocks, block, level_mode, max_allowed_blocks):
+        if not block["splitter"] or block["split_done"]:
+            return
+        if len(blocks) >= max_allowed_blocks:
+            return
+
+        if level_mode == "side":
+            if abs(block["x"] - CENTER_X) > self.split_trigger_margin:
+                return
         else:
-            fall_speed = max(-START_SPEED - (score * SPEED_INCREASE), -MAX_FALL_SPEED)
-            level_mode = "side"
+            if abs(block["y"] - CENTER_Y) > self.split_trigger_margin:
+                return
 
-        update_blocks(blocks, fall_speed, score, level_mode)
+        block["split_done"] = True
+        parent_size = block["size"]
+        child_size = max(int(18 * MIN_SCALE), parent_size // 2)
+        cx, cy = block["x"] + parent_size / 4, block["y"] + parent_size / 4
 
-        x = max(PLAYER_RADIUS, min(W - PLAYER_RADIUS, x))
-        y = max(PLAYER_RADIUS, min(H - PLAYER_RADIUS, y))
-        player_rect = pygame.Rect(x - PLAYER_RADIUS, y - PLAYER_RADIUS, PLAYER_RADIUS * 2, PLAYER_RADIUS * 2)
+        if level_mode == "side":
+            c1 = {"x": cx, "y": cy, "size": child_size, "splitter": False, "split_done": True, "vx": block["vx"], "vy": -self.split_child_spread}
+            c2 = {"x": cx, "y": cy, "size": child_size, "splitter": False, "split_done": True, "vx": block["vx"], "vy": +self.split_child_spread}
+        else:
+            c1 = {"x": cx, "y": cy, "size": child_size, "splitter": False, "split_done": True, "vx": -self.split_child_spread, "vy": block["vy"]}
+            c2 = {"x": cx, "y": cy, "size": child_size, "splitter": False, "split_done": True, "vx": +self.split_child_spread, "vy": block["vy"]}
 
-        portal_rect = None
-        portal_y_top = int(20 * SCALE)
-        portal_y_bot = H - int(40 * SCALE)
-        
-        if portal1: portal_rect = pygame.Rect(W//2 - portal_w//2, portal_y_top, portal_w, portal_h)
-        elif portal2: portal_rect = pygame.Rect(W//2 - portal_w//2, portal_y_bot, portal_w, portal_h)
+        blocks.extend([c1, c2])
 
-        if portal_rect:
-            dx, dy = portal_rect.centerx - x, portal_rect.centery - y
-            x += dx * 0.05
-            y += dy * 0.05
-            player_rect.center = (x, y)
-
-            if player_rect.colliderect(portal_rect):
-                if not level_flipped:
-                    level_flipped = True
-                    x, y = W // 2, int(100 * SCALE)
-                    blocks = create_blocks("up")
-                else:
-                    level_side = True
-                    x, y = int(100 * SCALE), H // 2
-                    blocks = create_blocks("side")
-                player_vx, player_vy = 0, 0
-                continue
+    def update_blocks(self, blocks, fall_speed, current_score, level_mode):
+        extra_planeten = (current_score // 800)
+        max_allowed = self.block_count + extra_planeten + self.split_max_extra
 
         for block in blocks:
-            b_rect = pygame.Rect(block["x"], block["y"], block["size"], block["size"])
-            hitbox = b_rect.inflate(int(-6 * SCALE), int(-6 * SCALE))
-            
-            if player_rect.colliderect(hitbox) and immunity_timer == 0 and not portal_active:
-                lives -= 1
-                render_frame(screen, blocks, x, y, score, lives, 1, bg_img, imgs, p_img, portal_rect, portal_img)
-                pygame.time.delay(300)
-                immunity_timer = 90
+            s = block["size"]
+            if level_mode == "side":
+                block["x"] += fall_speed
+                block["y"] += block["vy"]
+                block["x"] += block["vx"]
+                self.maybe_split(blocks, block, level_mode, max_allowed)
+                if block["x"] < -s:
+                    self.respawn_block(block, level_mode)
+            else:
+                block["y"] += fall_speed
+                block["x"] += block["vx"]
+                block["y"] += block["vy"]
+                self.maybe_split(blocks, block, level_mode, max_allowed)
+                if fall_speed > 0 and block["y"] > SCREEN_HEIGHT:
+                    self.respawn_block(block, "down")
+                elif fall_speed < 0 and block["y"] < -s:
+                    self.respawn_block(block, "up")
 
-                if lives <= 0:
-                    show_game_over(screen, score)
-                    lives, score, fall_speed = 3, 0, START_SPEED
-                    level_flipped, level_side = False, False
-                    x, y = W // 2, H - int(100 * SCALE)
-                    player_vx, player_vy = 0, 0
-                    blocks = create_blocks("down")
-                break
+        if len(blocks) < self.block_count + extra_planeten:
+            blocks.append(self.make_block(level_mode))
 
-        render_frame(screen, blocks, x, y, score, lives, immunity_timer, bg_img, imgs, p_img, portal_rect, portal_img)
-        
-        heart_margin = int(20 * SCALE)
-        heart_spacing = int(35 * SCALE)
-        for i in range(lives):
-            screen.blit(heart_img, (heart_margin + (i * heart_spacing), heart_margin))
+    def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active):
+        surface.fill(BLACK)
+        if self.background_image:
+            surface.blit(self.background_image, (0, 0))
+
+        if portal_rect and self.portal_image:
+            surface.blit(self.portal_image, portal_rect)
+
+        for b in blocks:
+            size = b["size"]
+            bx = int(b["x"])
+            by = int(b["y"])
+
+            # --- OPTIMALISATIE START ---
+            # We checken of dit blokje al een plaatje heeft.
+            # Zo niet ("Lazy Loading"), dan maken we die NU aan en slaan we hem op.
+            if b.get("image") is None:
+                if self.meteor_small and self.meteor_medium and self.meteor_large:
+                    boundary_small = 40 * MIN_SCALE
+                    boundary_medium = 50 * MIN_SCALE
+
+                    if size < boundary_small:
+                        base_img = self.meteor_small
+                    elif size < boundary_medium:
+                        base_img = self.meteor_medium
+                    else:
+                        base_img = self.meteor_large
+                    
+                    # Hier gebeurt het zware werk (schalen), maar dit doen we nu 
+                    # maar 1 keer per meteoor in plaats van 60 keer per seconde!
+                    b["image"] = pygame.transform.scale(base_img, (size, size))
+                if b.get("image"):
+                    surface.blit(b["image"], (bx, by))
+                
+                else:
+                    b["image"] = None
+
+            # Nu tekenen we gewoon het opgeslagen plaatje
+            if b.get("image"):
+                surface.blit(b["image"], (bx, by))
+            else:
+                # Fallback: als er geen plaatjes zijn geladen, teken een wit vierkant
+                pygame.draw.rect(surface, WHITE, (bx, by, size, size))
+            # --- OPTIMALISATIE EINDE ---
+
+            if b["splitter"] and not b["split_done"]:
+                radius = int((size // 2) + (8 * MIN_SCALE))
+                pygame.draw.circle(surface, YELLOW, (bx + size // 2, by + size // 2), max(1, radius), 3)
+
+        if immunity == 0 or (immunity // 5) % 2 == 0:
+            if self.player_image:
+                surface.blit(self.player_image, self.player_image.get_rect(center=(int(px), int(py))))
+            else:
+                pygame.draw.circle(surface, GAME_BLUE, (int(px), int(py)), self.player_radius)
+
+        score_x = SCREEN_WIDTH - max(1, int(200 * MIN_SCALE))
+        score_y = max(0, int(20 * MIN_SCALE))
+        surface.blit(FONT_SCORE.render(f"Score: {score // 10}", True, WHITE), (score_x, score_y))
+
+        if self.heart_image:
+            start_x = max(0, int(20 * MIN_SCALE))
+            y_pos = max(0, int(20 * MIN_SCALE))
+            spacing = max(1, int(35 * MIN_SCALE))
+            for i in range(lives):
+                surface.blit(self.heart_image, (start_x + (i * spacing), y_pos))
+        else:
+            surface.blit(FONT_SCORE.render(f"Lives: {lives}", True, RED), (20, 20))
+
         pygame.display.flip()
 
-    pygame.quit()
-    sys.exit()
+    def run(self, screen) -> GameState:
+        audio.play_music(audio_path.gameplay_music, 0.4)
+        self.load_assets()
 
-if __name__ == '__main__':
+        c = self.game.controls
+        clock = pygame.time.Clock()
+
+        x, y = CENTER_X, SCREEN_HEIGHT - int(100 * MIN_SCALE)
+        player_vx = 0.0
+        player_vy = 0.0
+
+        blocks = self.create_blocks("down")
+        score = 0
+        lives = 3
+        immunity_timer = 0
+        level_flipped = False
+        level_side = False
+
+        while True:
+            clock.tick(60)
+
+            if immunity_timer > 0:
+                immunity_timer -= 1
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return GameState.QUIT
+                
+                if event.type == pygame.VIDEORESIZE:
+                    self.game.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
+                    recalc_display_metrics(self.game.screen)
+
+                    self.load_assets()
+
+                    for block in blocks:
+                        block["image"] = None
+
+                    ratio_x = x / SCREEN_WIDTH
+                    ratio_y = y / SCREEN_HEIGHT
+                    x = ratio_x * event.w
+                    y = ratio_y * event.h
+
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        return GameState.TITLE
+
+            portal1 = ((score // 10) >= 250 and not level_flipped)
+            portal2 = ((score // 10) >= 500 and level_flipped and not level_side)
+            portal_active = portal1 or portal2
+
+            keys = pygame.key.get_pressed()
+            input_x = 0
+            input_y = 0
+
+            if not portal_active:
+                if keys[c.left]:
+                    input_x -= 1
+                if keys[c.right]:
+                    input_x += 1
+                if keys[c.up]:
+                    input_y -= 1
+                if keys[c.down]:
+                    input_y += 1
+
+            if input_x != 0:
+                player_vx += input_x * self.player_accel
+            else:
+                player_vx *= self.player_friction
+
+            if input_y != 0:
+                player_vy += input_y * self.player_accel
+            else:
+                player_vy *= self.player_friction
+
+            speed = math.sqrt(player_vx * player_vx + player_vy * player_vy)
+            if speed > self.player_max_speed:
+                scale = self.player_max_speed / speed
+                player_vx *= scale
+                player_vy *= scale
+
+            if abs(player_vx) < 0.1:
+                player_vx = 0.0
+            if abs(player_vy) < 0.1:
+                player_vy = 0.0
+
+            x += player_vx
+            y += player_vy
+
+            score += 1
+
+            if not level_flipped:
+                fall_speed = min(self.start_speed + (score * self.speed_increase), self.max_fall_speed)
+                level_mode = "down"
+            elif level_flipped and not level_side:
+                fall_speed = max(-self.start_speed - (score * self.speed_increase), -self.max_fall_speed)
+                level_mode = "up"
+            else:
+                fall_speed = max(-self.start_speed - (score * self.speed_increase), -self.max_fall_speed)
+                level_mode = "side"
+
+            self.update_blocks(blocks, fall_speed, score, level_mode)
+
+            x = max(self.player_radius, min(SCREEN_WIDTH - self.player_radius, x))
+            y = max(self.player_radius, min(SCREEN_HEIGHT - self.player_radius, y))
+
+            player_rect = pygame.Rect(int(x) - self.player_radius, int(y) - self.player_radius, self.player_radius * 2, self.player_radius * 2)
+
+            portal_rect = None
+            p_w = max(1, int(200 * MIN_SCALE))
+            p_h = max(1, int(40 * MIN_SCALE))
+
+            if portal1:
+                portal_rect = pygame.Rect(int(CENTER_X - (p_w // 2)), int(20 * MIN_SCALE), p_w, p_h)
+            elif portal2:
+                portal_rect = pygame.Rect(int(CENTER_X - (p_w // 2)), SCREEN_HEIGHT - int(40 * MIN_SCALE), p_w, p_h)
+
+            if portal_rect:
+                dx, dy = portal_rect.centerx - x, portal_rect.centery - y
+                x += dx * 0.05
+                y += dy * 0.05
+                player_rect.center = (int(x), int(y))
+
+                if player_rect.colliderect(portal_rect):
+                    if not level_flipped:
+                        level_flipped = True
+                        x, y = CENTER_X, int(100 * MIN_SCALE)
+                        blocks = self.create_blocks("up")
+                    else:
+                        level_side = True
+                        x, y = int(100 * MIN_SCALE), CENTER_Y
+                        blocks = self.create_blocks("side")
+                    player_vx, player_vy = 0.0, 0.0
+                    continue
+
+            for block in blocks:
+                b_rect = pygame.Rect(int(block["x"]), int(block["y"]), block["size"], block["size"])
+                hitbox_margin = int(6 * MIN_SCALE)
+                hitbox = b_rect.inflate(-hitbox_margin, -hitbox_margin)
+
+                if player_rect.colliderect(hitbox) and immunity_timer == 0 and not portal_active:
+                    lives -= 1
+                    if lives > 0:
+                        audio.play_sfx(audio_path.hit_sound, 0.5)
+                        # De extra render_frame mag ook weg, de loop pakt dit vanzelf op
+                        immunity_timer = 90 
+                    else:
+                        self.game.last_score = score // 10
+                        return GameState.GAMEOVER
+                    break
+
+            self.render_frame(screen, blocks, x, y, score, lives, immunity_timer, portal_rect, portal_active)
+
+class Game:
+    def __init__(self):
+        pygame.init()
+        pygame.mixer.init()
+
+        self.controls = Controls()
+        self.last_score = 0
+        self.menu_background = None
+        self.current_skin = "spaceshipp.png"
+
+        self.screen = pygame.display.set_mode((REF_WIDTH, REF_HEIGHT), pygame.RESIZABLE)
+        recalc_display_metrics(self.screen)
+
+        global FONT_SCORE
+        FONT_SCORE = pygame.font.SysFont("Arial", max(1, int(30 * MIN_SCALE)), bold=True)
+
+        pygame.display.set_caption("Space Dodger")
+
+        self._load_menu_background()
+
+        self.title_screen = TitleScreen(self)
+        self.options_screen = OptionsScreen(self)
+        self.controls_screen = ControlsScreen(self)
+        self.sound_screen = SoundScreen(self)
+        self.game_over_screen = GameOverScreen(self)
+        self.video_screen = VideoScreen(self)
+
+    def _load_menu_background(self):
+        try:
+            self.menu_background = pygame.image.load("images/background.png").convert()
+            self.menu_background = pygame.transform.scale(self.menu_background, SCREEN_SIZE)
+        except:
+            self.menu_background = None
+
+    def draw_menu_background(self, screen):
+        if self.menu_background:
+            screen.blit(self.menu_background, (0, 0))
+        else:
+            screen.fill(BLUE)
+
+    def game_loop(self, screen, buttons: RenderUpdates) -> GameState:
+        while True:
+            if not pygame.mixer.music.get_busy():
+                audio.play_music(audio_path.menu_music, 0.5)
+
+            mouse_up = False
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return GameState.QUIT
+                if event.type == pygame.VIDEORESIZE:
+                    self.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
+                    recalc_display_metrics(self.screen)
+                    self._load_menu_background()
+                    for btn in buttons:
+                        if hasattr(btn, 'refresh_scaling'):
+                            btn.refresh_scaling()
+
+                if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                    mouse_up = True
+                if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    return GameState.QUIT
+
+            self.draw_menu_background(screen)
+
+            for button in buttons:
+                ui_action = button.update(pygame.mouse.get_pos(), mouse_up)
+                if ui_action is not None:
+                    return ui_action
+                button.draw(screen)
+
+            pygame.display.flip()
+
+    def run(self):
+        game_state = GameState.TITLE
+
+        while True:
+            if game_state == GameState.TITLE:
+                audio.play_music(audio_path.menu_music, 0.5)
+                game_state = self.title_screen.run(self.screen)
+            elif game_state == GameState.PLAYING:
+                game_state = LevelSession(self).run(self.screen)
+            elif game_state == GameState.GAMEOVER:
+                audio.play_music(audio_path.gameover_music, 0.5, loop=0)
+                game_state = self.game_over_screen.run(self.screen)
+            elif game_state == GameState.OPTIONS:
+                game_state = self.options_screen.run(self.screen)
+            elif game_state == GameState.CONTROLS:
+                game_state = self.controls_screen.run(self.screen)
+            elif game_state == GameState.SOUND:
+                game_state = self.sound_screen.run(self.screen)
+            elif game_state == GameState.VIDEO:
+                game_state = self.video_screen.run(self.screen)
+            elif game_state == GameState.QUIT:
+                pygame.quit()
+                sys.exit()
+
+def main():
+    Game().run()
+
+if __name__ == "__main__":
     main()
