@@ -124,6 +124,8 @@ class UIElement(Sprite):
         if self.rect.collidepoint(mouse_pos):
             self.mouse_over = True
             if mouse_up:
+                if audio.sfx_enabled:
+                    audio.play_sfx(audio_path.button_sound, 0.5)
                 return self.action
         else:
             self.mouse_over = False
@@ -301,8 +303,6 @@ class SoundScreen:
                     audio.toggle_sfx()
                     new_effects_text, new_effects_col = self.get_sfx_info()
                     button.set_text(new_effects_text, 30, new_effects_col)
-                    if audio.sfx_enabled:
-                        audio.play_sfx(audio_path.hit_sound, 0.5)
 
                 elif isinstance(ui_action, GameState):
                     return ui_action
@@ -369,7 +369,6 @@ class VideoScreen:
                     self.skin_index = (self.skin_index + 1) % len(self.available_skins)
                     self.game.current_skin = self.available_skins[self.skin_index]
                     button.set_text(self.get_skin_text(), 35, YELLOW)
-                    audio.play_sfx(audio_path.hit_sound, 0.2)
 
                 elif isinstance(ui_action, GameState):
                     return ui_action
