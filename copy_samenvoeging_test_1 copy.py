@@ -892,7 +892,7 @@ class LevelSession:
                 if player_rect.colliderect(pu_r):
                     if pu["type"] == "SHIELD": self.shield_active = True
                     else: lives = min(lives + 1, 5)
-                    if audio.sfx_enabled: audio.play_sfx(audio_path.button_sound, 0.6)
+                    if audio.sfx_enabled: audio.play_sfx(audio_path.heal_sound, 0.6)
                     self.powerups.remove(pu)
                 elif pu["y"] > SCREEN_HEIGHT + 100 or pu["y"] < -200:
                     self.powerups.remove(pu)
