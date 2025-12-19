@@ -454,7 +454,7 @@ class LevelSession:
         self.shake_intensity = 0
 
         self.powerups = []
-        self.powerup_spawn_chance = 0.005 # Kans per frame
+        self.powerup_spawn_chance = 0.001 # Kans per frame
         self.shield_active = False
         self.pu_shield_img = None
         self.pu_life_img = None

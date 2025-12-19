@@ -434,9 +434,12 @@ class LevelSession:
         self.score_surface = None
 
         self.bg_scroll = 0
+        self.bg_scroll2 = 0
         self.bg_speed = 1
-        self.current_bg_index = 0
+        self.bg_speed2 = 6
         self.bg_images = []
+        self.bg_images2 = []
+        self.current_bg_index = 0
 
         self.block_count = 4
         self.player_radius = 0
@@ -454,7 +457,7 @@ class LevelSession:
         self.shake_intensity = 0
 
         self.powerups = []
-        self.powerup_spawn_chance = 0.005 # Kans per frame
+        self.powerup_spawn_chance = 0.001 # Kans per frame
         self.shield_active = False
         self.pu_shield_img = None
         self.pu_life_img = None
@@ -489,11 +492,16 @@ class LevelSession:
             self.player_image = None
 
         self.bg_images = []
+        self.bg_images2 = []
         for i in range(1, 5):
             try:
                 img = pygame.image.load(f"images/bgob{i}.png").convert()
                 img = pygame.transform.scale(img, SCREEN_SIZE)
                 self.bg_images.append(img)
+
+                img_stars = pygame.image.load("images/stars.png").convert_alpha()
+                img_stars = pygame.transform.scale(img_stars, SCREEN_SIZE)
+                self.bg_images2.append(img_stars)
             except:
                 pass
         self.bg_scroll = 0
@@ -681,15 +689,19 @@ class LevelSession:
         canvas.fill(BLACK)
 
         if self.bg_images:
-            self.bg_scroll += self.bg_speed
-            if self.bg_scroll >= SCREEN_HEIGHT:
-                self.bg_scroll = 0
-                self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
-            next_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
-            canvas.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
-            canvas.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
-        elif self.background_image:
-            canvas.blit(self.background_image, (0, 0))
+            current_img = self.bg_images[self.current_bg_index]
+            next_bg_idx = (self.current_bg_index + 1) % len(self.bg_images)
+            next_img = self.bg_images[next_bg_idx]
+            canvas.blit(current_img, (0, self.bg_scroll))
+            canvas.blit(next_img, (0, self.bg_scroll - SCREEN_HEIGHT))
+    
+        if self.bg_images2:
+            current_stars = self.bg_images2[self.current_bg_index]
+            next_stars_idx = (self.current_bg_index + 1) % len(self.bg_images2)
+            next_stars = self.bg_images2[next_stars_idx]
+        
+            canvas.blit(current_stars, (0, self.bg_scroll2))
+            canvas.blit(next_stars, (0, self.bg_scroll2 - SCREEN_HEIGHT))
 
         if portal_rect and self.portal_image:
             canvas.blit(self.portal_image, portal_rect)
@@ -863,6 +875,12 @@ class LevelSession:
                 if self.bg_scroll >= SCREEN_HEIGHT:
                     self.bg_scroll = 0
                     self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+
+            if self.bg_images2:
+                self.bg_scroll2 += self.bg_speed2 * dt_factor
+                if self.bg_scroll2 >= SCREEN_HEIGHT:
+                    self.bg_scroll2 = 0
+
             score += 1 * dt_factor
 
             if not level_flipped:
