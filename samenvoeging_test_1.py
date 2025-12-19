@@ -317,6 +317,8 @@ class SoundScreen:
 
                 elif ui_action == "TOGGLE_SFX":
                     audio.toggle_sfx()
+                    if audio.sfx_enabled:
+                        audio.play_sfx(audio_path.button_sound, 0.5)
                     new_effects_text, new_effects_col = self.get_sfx_info()
                     button.set_text(new_effects_text, 30, new_effects_col)
 
@@ -404,6 +406,13 @@ class LevelSession:
         self.meteor_large = None
         self.heart_image = None
         self.portal_image = None
+        self.last_rendered_score = -1
+        self.score_surface = None
+
+        self.bg_scroll = 0
+        self.bg_speed = 1
+        self.current_bg_index = 0
+        self.bg_images = []
 
         self.block_count = 4
         self.player_radius = 0
@@ -418,6 +427,7 @@ class LevelSession:
         self.split_child_spread = 0
         self.split_max_extra = 8
         self.apply_scaling()
+        self.shake_intensity = 0
 
     def apply_scaling(self):
         self.player_radius = max(1, int(20 * MIN_SCALE))
@@ -447,6 +457,17 @@ class LevelSession:
             self.player_image = pygame.transform.scale(self.player_image, (final_pixel_size, final_pixel_size))
         except:
             self.player_image = None
+
+        self.bg_images = []
+        for i in range(1, 5):
+            try:
+                img = pygame.image.load(f"images/bgob{i}.png").convert()
+                img = pygame.transform.scale(img, SCREEN_SIZE)
+                self.bg_images.append(img)
+            except:
+                pass
+        self.bg_scroll = 0
+        self.current_bg_index = 0
 
         try:
             self.background_image = pygame.image.load("images/galaxy.png").convert()
@@ -549,6 +570,9 @@ class LevelSession:
         else:
             if abs(block["y"] - CENTER_Y) > self.split_trigger_margin:
                 return
+            
+        if audio.sfx_enabled:
+            audio.play_sfx(audio_path.split_sound, 0.2)
 
         block["split_done"] = True
         parent_size = block["size"]
@@ -564,21 +588,26 @@ class LevelSession:
 
         blocks.extend([c1, c2])
 
-    def update_blocks(self, blocks, fall_speed, current_score, level_mode):
+    def update_blocks(self, blocks, fall_speed, current_score, level_mode, dt_factor):
         extra_planeten = (current_score // 800)
         max_allowed = self.block_count + extra_planeten + self.split_max_extra
 
         for block in blocks:
             if block.get("zigzag") == True:
                 tijd = pygame.time.get_ticks() + block["zigzag_offset"]
-                golf = math.sin(tijd * 0.005) * (4 * MIN_SCALE)
+                golf = math.sin(tijd * 0.005) * (4 * MIN_SCALE) * dt_factor
                 
                 if level_mode == "side":
                     block["y"] += golf
                 else:
                     block["x"] += golf
+
+            adjusted_fall_speed = fall_speed * dt_factor
+            adjusted_vx = block["vx"] * dt_factor
+            adjusted_vy = block["vy"] * dt_factor
             
             s = block["size"]
+
             if level_mode == "side":
                 block["x"] += fall_speed
                 block["y"] += block["vy"]
@@ -599,51 +628,78 @@ class LevelSession:
         if len(blocks) < self.block_count + extra_planeten:
             blocks.append(self.make_block(current_score, level_mode))
 
-    def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active):
-        surface.fill(BLACK)
-        if self.background_image:
-            surface.blit(self.background_image, (0, 0))
+    def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active, player_vx):
+        
+        offset_x = 0
+        offset_y = 0
+        if self.shake_intensity > 0:
+            offset_x = random.randint(-self.shake_intensity, self.shake_intensity)
+            offset_y = random.randint(-self.shake_intensity, self.shake_intensity)
+            self.shake_intensity = max(0, self.shake_intensity - 1)
+        canvas = pygame.Surface(SCREEN_SIZE)
+        canvas.fill(BLACK)
+
+        if self.bg_images:
+            self.bg_scroll += self.bg_speed
+            if self.bg_scroll >= SCREEN_HEIGHT:
+                self.bg_scroll = 0
+                self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+            next_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+            canvas.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
+            canvas.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
+        elif self.background_image:
+            canvas.blit(self.background_image, (0, 0))
 
         if portal_rect and self.portal_image:
-            surface.blit(self.portal_image, portal_rect)
+            canvas.blit(self.portal_image, portal_rect)
 
         for b in blocks:
-            size = b["size"]
             bx = int(b["x"])
             by = int(b["y"])
-
             if b.get("image") is None:
                 if self.meteor_small and self.meteor_medium and self.meteor_large:
                     boundary_small = 40 * MIN_SCALE
                     boundary_medium = 50 * MIN_SCALE
-
-                    if size < boundary_small:
-                        base_img = self.meteor_small
-                    elif size < boundary_medium:
-                        base_img = self.meteor_medium
-                    else:
-                        base_img = self.meteor_large
-
-                    b["image"] = pygame.transform.scale(base_img, (size, size))
+                    if b["size"] < boundary_small: base_img = self.meteor_small
+                    elif b["size"] < boundary_medium: base_img = self.meteor_medium
+                    else: base_img = self.meteor_large
+                    b["image"] = pygame.transform.scale(base_img, (b["size"], b["size"]))
+                else: b["image"] = None
 
             if b.get("image"):
-                surface.blit(b["image"], (bx, by))
+                canvas.blit(b["image"], (bx, by))
             else:
-                pygame.draw.rect(surface, WHITE, (bx, by, size, size))
+                pygame.draw.rect(surface, WHITE, (int(b["x"]), int(b["y"]), b["size"], b["size"]))
 
             if b["splitter"] and not b["split_done"]:
-                radius = int((size // 2) + (8 * MIN_SCALE))
-                pygame.draw.circle(surface, YELLOW, (bx + size // 2, by + size // 2), max(1, radius), 3)
+                radius = int((b["size"] // 2) + (8 * MIN_SCALE))
+                pygame.draw.circle(canvas, YELLOW, (int(b["x"] + b["size"] // 2), int(b["y"] + b["size"] // 2)), max(1, radius), 3)
 
-        if immunity == 0 or (immunity // 5) % 2 == 0:
+        if immunity <= 0 or (int(immunity) // 5) % 2 == 0:
             if self.player_image:
-                surface.blit(self.player_image, self.player_image.get_rect(center=(int(px), int(py))))
+                
+                tilt_angle = player_vx * -2.5
+                rotated_player = pygame.transform.rotate(self.player_image, tilt_angle)
+                player_rect = rotated_player.get_rect(center=(int(px), int(py)))
+
+
+                canvas.blit(rotated_player, player_rect)
             else:
                 pygame.draw.circle(surface, GAME_BLUE, (int(px), int(py)), self.player_radius)
+            
+        surface.blit(canvas, (offset_x, offset_y))
 
+        current_display_score = int(score // 10)
+        
+        if current_display_score != self.last_rendered_score:
+            self.score_surface = FONT_SCORE.render(f"Score: {current_display_score}", True, WHITE)
+            self.last_rendered_score = current_display_score
+        
         score_x = SCREEN_WIDTH - max(1, int(200 * MIN_SCALE))
         score_y = max(0, int(20 * MIN_SCALE))
-        surface.blit(FONT_SCORE.render(f"Score: {score // 10}", True, WHITE), (score_x, score_y))
+        
+        if self.score_surface:
+            surface.blit(self.score_surface, (score_x, score_y))
 
         if self.heart_image:
             start_x = max(0, int(20 * MIN_SCALE))
@@ -675,14 +731,20 @@ class LevelSession:
         level_side = False
 
         while True:
-            clock.tick(60)
+            dt_ms = clock.tick(60) 
+            dt = dt_ms / 1000.0 
+            dt_factor = dt * 60
 
             if immunity_timer > 0:
-                immunity_timer -= 1
+                immunity_timer -= 1 * dt_factor
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     return GameState.QUIT
+                
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        return GameState.TITLE
 
                 if event.type == pygame.VIDEORESIZE:
                     old_w, old_h = SCREEN_WIDTH, SCREEN_HEIGHT
@@ -695,6 +757,8 @@ class LevelSession:
                     self.game._load_menu_background()
                     self.apply_scaling()
                     self.load_assets()
+                    self.bg_scroll = 0
+                    self.current_bg_index = 0
 
                     x = rx * SCREEN_WIDTH
                     y = ry * SCREEN_HEIGHT
@@ -702,14 +766,9 @@ class LevelSession:
                     for block in blocks:
                         block["image"] = None
 
-                    ratio_x = x / SCREEN_WIDTH
-                    ratio_y = y / SCREEN_HEIGHT
-                    x = ratio_x * event.w
-                    y = ratio_y * event.h
-
-                if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        return GameState.TITLE
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_ESCAPE:
+                            return GameState.TITLE
 
             portal1 = ((score // 10) >= 250 and not level_flipped)
             portal2 = ((score // 10) >= 500 and level_flipped and not level_side)
@@ -730,14 +789,13 @@ class LevelSession:
                     input_y += 1
 
             if input_x != 0:
-                player_vx += input_x * self.player_accel
+                player_vx += input_x * self.player_accel * dt_factor
             else:
-                player_vx *= self.player_friction
-
+                player_vx *= math.pow(self.player_friction, dt_factor)
             if input_y != 0:
-                player_vy += input_y * self.player_accel
+                player_vy += input_y * self.player_accel * dt_factor
             else:
-                player_vy *= self.player_friction
+                player_vy *= math.pow(self.player_friction, dt_factor)
 
             speed = math.sqrt(player_vx * player_vx + player_vy * player_vy)
             if speed > self.player_max_speed:
@@ -750,10 +808,17 @@ class LevelSession:
             if abs(player_vy) < 0.1:
                 player_vy = 0.0
 
-            x += player_vx
-            y += player_vy
+            x += player_vx * dt_factor
+            y += player_vy * dt_factor
 
-            score += 1
+            
+
+            if self.bg_images:
+                self.bg_scroll += self.bg_speed * dt_factor
+                if self.bg_scroll >= SCREEN_HEIGHT:
+                    self.bg_scroll = 0
+                    self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+            score += 1 * dt_factor
 
             if not level_flipped:
                 fall_speed = min(self.start_speed + (score * self.speed_increase), self.max_fall_speed)
@@ -765,7 +830,7 @@ class LevelSession:
                 fall_speed = max(-self.start_speed - (score * self.speed_increase), -self.max_fall_speed)
                 level_mode = "side"
 
-            self.update_blocks(blocks, fall_speed, score, level_mode)
+            self.update_blocks(blocks, fall_speed, score, level_mode, dt_factor)
 
             x = max(self.player_radius, min(SCREEN_WIDTH - self.player_radius, x))
             y = max(self.player_radius, min(SCREEN_HEIGHT - self.player_radius, y))
@@ -783,8 +848,8 @@ class LevelSession:
 
             if portal_rect:
                 dx, dy = portal_rect.centerx - x, portal_rect.centery - y
-                x += dx * 0.05
-                y += dy * 0.05
+                x += dx * 0.05 * dt_factor
+                y += dy * 0.05 * dt_factor
                 player_rect.center = (int(x), int(y))
 
                 if player_rect.colliderect(portal_rect):
@@ -808,8 +873,9 @@ class LevelSession:
 
                 distance = math.hypot(x - planet_center_x, y - planet_center_y)
 
-                if distance < (self.player_radius + hitbox_radius) and immunity_timer == 0 and not portal_active:
+                if distance < (self.player_radius + hitbox_radius) and immunity_timer <= 0 and not portal_active:
                     lives -= 1
+                    self.shake_intensity = 15
                     if lives > 0:
                         audio.play_sfx(audio_path.hit_sound, 0.5)
                         immunity_timer = 90 
@@ -819,7 +885,7 @@ class LevelSession:
                         return GameState.GAMEOVER
                     break
 
-            self.render_frame(screen, blocks, x, y, score, lives, immunity_timer, portal_rect, portal_active)
+            self.render_frame(screen, blocks, x, y, score, lives, immunity_timer, portal_rect, portal_active, player_vx)
 
 class Game:
     def __init__(self):
@@ -931,3 +997,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
