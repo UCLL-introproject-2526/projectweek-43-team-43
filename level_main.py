@@ -1335,7 +1335,7 @@ class Game:
         self.active_start_speed = START_SPEED
         self.active_speed_increase = SPEED_INCREASE
         self.active_max_blocks = MAX_BLOCKS
-        self.screen = pygame.display.set_mode(SCREEN_SIZE)
+        self.screen = pygame.display.set_mode(SCREEN_SIZE, pygame.FULLSCREEN | pygame.DOUBLEBUF | pygame.HWSURFACE)
         pygame.display.set_caption("Dodge Blocks")
         self._load_menu_background()
         self.title_screen = TitleScreen(self)
