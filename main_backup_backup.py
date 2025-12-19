@@ -49,6 +49,7 @@ FONT_SCORE = None
 class PowerUpType(Enum):
     SHIELD = 1
     EXTRA_LIFE = 2
+    BONUS = 3
 
 class PowerUp:
     def __init__(self, pu_type, x, y, size, image):
@@ -194,10 +195,14 @@ class OptionsScreen(MenuScreenBase):
 class GameOverScreen(MenuScreenBase):
     def build_buttons(self):
         tekst_btn = UIElement((0.5, 0.2), "GAME OVER", 60, RED)
-        score_display = UIElement((0.5, 0.35), f"Jouw Score: {int(self.game.last_score)}", 40, YELLOW)
-        restart_btn = UIElement((0.5, 0.5), "Opnieuw spelen", 30, WHITE, GameState.PLAYING)
-        menu_btn = UIElement((0.5, 0.65), "Hoofdmenu", 30, WHITE, GameState.TITLE)
-        return RenderUpdates(tekst_btn, score_display, restart_btn, menu_btn)
+        
+        base_display = UIElement((0.5, 0.30), f"Afstand Score: {int(self.game.last_base_score)}", 30, WHITE)
+        bonus_display = UIElement((0.5, 0.40), f"Bonus Punten: +{int(self.game.last_bonus)}", 30, GREEN)        
+        total_score = UIElement((0.5, 0.50), f"TOTAAL: {int(self.game.last_score)}", 50, YELLOW)
+        restart_btn = UIElement((0.5, 0.65), "Opnieuw spelen", 30, WHITE, GameState.PLAYING)
+        
+        menu_btn = UIElement((0.5, 0.8), "Hoofdmenu", 30, WHITE, GameState.TITLE)
+        return RenderUpdates(tekst_btn, base_display, bonus_display, total_score, restart_btn, menu_btn)
 
 class ControlsScreen:
     def __init__(self, game):
@@ -436,7 +441,7 @@ class LevelSession:
         self.bg_scroll = 0
         self.bg_scroll2 = 0
         self.bg_speed = 1
-        self.bg_speed2 = 6
+        self.bg_speed2 = 4
         self.bg_images = []
         self.bg_images2 = []
         self.current_bg_index = 0
@@ -457,10 +462,12 @@ class LevelSession:
         self.shake_intensity = 0
 
         self.powerups = []
-        self.powerup_spawn_chance = 0.001 # Kans per frame
+        self.powerup_spawn_chance = 0.003
         self.shield_active = False
+        self.shield_timer = 0
         self.pu_shield_img = None
         self.pu_life_img = None
+        self.bonus_collected = 0
 
     def apply_scaling(self):
         self.player_radius = max(1, int(20 * MIN_SCALE))
@@ -543,10 +550,12 @@ class LevelSession:
             self.pu_shield_img = pygame.transform.scale(self.pu_shield_img, (pu_size, pu_size))
             self.pu_life_img = pygame.image.load("images/lives.png").convert_alpha()
             self.pu_life_img = pygame.transform.scale(self.pu_life_img, (pu_size, pu_size))
-        
+            self.pu_bonus_img = pygame.image.load("images/bonus.png").convert_alpha()
+            self.pu_bonus_img = pygame.transform.scale(self.pu_bonus_img, (pu_size, pu_size))
         except:
             self.pu_shield_img = None
             self.pu_life_img = None
+            self.pu_bonus_img = None
 
     def make_block(self, current_score, level_mode="down"):
         base_size = random.randint(20, 65)
@@ -563,10 +572,17 @@ class LevelSession:
             x = random.randint(0, max(1, SCREEN_WIDTH - size))
             y = random.randint(-offset, 0)
 
-        is_splitter = (random.random() < 0.10)
-
+        is_splitter = False
+        is_tracker = False
         is_zigzag = False
-        if current_score > 2500 and random.random() < 0.3:
+
+        if random.random() < 0.10:
+            is_splitter = True
+        
+        elif (current_score // 10) >= 500 and random.random() < 0.30:
+            is_tracker = True
+        
+        elif current_score > 2500 and random.random() < 0.3:
             is_zigzag = True
 
         drift_strength = 1.2 * MIN_SCALE
@@ -596,6 +612,7 @@ class LevelSession:
             "vy": random.uniform(-0.5 * MIN_SCALE, 0.5 * MIN_SCALE),
             "zigzag": is_zigzag,
             "zigzag_offset": random.randint(0, 10000),
+            "tracker": is_tracker
         }
 
     def create_blocks(self, level_mode="down"):
@@ -625,18 +642,32 @@ class LevelSession:
         child_size = max(int(18 * MIN_SCALE), parent_size // 2)
         cx, cy = block["x"] + parent_size / 4, block["y"] + parent_size / 4
 
+        base_props = {"splitter": False, "split_done": True, "tracker": False, "zigzag": False, "zigzag_offset": 0}
+
         if level_mode == "side":
-            c1 = {"x": cx, "y": cy, "size": child_size, "splitter": False, "split_done": True, "vx": block["vx"], "vy": -self.split_child_spread}
-            c2 = {"x": cx, "y": cy, "size": child_size, "splitter": False, "split_done": True, "vx": block["vx"], "vy": +self.split_child_spread}
+            c1 = {"x": cx, "y": cy, "size": child_size, "vx": block["vx"], "vy": -self.split_child_spread, **base_props}
+            c2 = {"x": cx, "y": cy, "size": child_size, "vx": block["vx"], "vy": +self.split_child_spread, **base_props}
         else:
-            c1 = {"x": cx, "y": cy, "size": child_size, "splitter": False, "split_done": True, "vx": -self.split_child_spread, "vy": block["vy"]}
-            c2 = {"x": cx, "y": cy, "size": child_size, "splitter": False, "split_done": True, "vx": +self.split_child_spread, "vy": block["vy"]}
+            c1 = {"x": cx, "y": cy, "size": child_size, "vx": -self.split_child_spread, "vy": block["vy"], **base_props}
+            c2 = {"x": cx, "y": cy, "size": child_size, "vx": +self.split_child_spread, "vy": block["vy"], **base_props}
+
+        for child in [c1, c2]:
+            if self.meteor_small and self.meteor_medium and self.meteor_large:
+                boundary_small = 40 * MIN_SCALE
+                boundary_medium = 50 * MIN_SCALE
+                if child["size"] < boundary_small: base = self.meteor_small
+                elif child["size"] < boundary_medium: base = self.meteor_medium
+                else: base = self.meteor_large
+                child["image"] = pygame.transform.scale(base, (child["size"], child["size"]))
+            else: child["image"] = None
 
         blocks.extend([c1, c2])
 
-    def update_blocks(self, blocks, fall_speed, current_score, level_mode, dt_factor):
+    def update_blocks(self, blocks, fall_speed, current_score, level_mode, dt_factor, player_x, player_y):
         extra_planeten = (current_score // 800)
         max_allowed = self.block_count + extra_planeten + self.split_max_extra
+
+        tracking_strength = 1.5 * MIN_SCALE * dt_factor 
 
         for block in blocks:
             if block.get("zigzag") == True:
@@ -647,6 +678,22 @@ class LevelSession:
                     block["y"] += golf
                 else:
                     block["x"] += golf
+
+            # Tracker logic
+            if block.get("tracker") == True:
+                block_center_x = block["x"] + block["size"] / 2
+                block_center_y = block["y"] + block["size"] / 2
+                
+                if level_mode == "side":
+                    if block_center_y < player_y:
+                        block["y"] += tracking_strength
+                    elif block_center_y > player_y:
+                        block["y"] -= tracking_strength
+                else:
+                    if block_center_x < player_x:
+                        block["x"] += tracking_strength
+                    elif block_center_x > player_x:
+                        block["x"] -= tracking_strength
 
             adjusted_fall_speed = fall_speed * dt_factor
             adjusted_vx = block["vx"] * dt_factor
@@ -704,9 +751,20 @@ class LevelSession:
             canvas.blit(self.portal_image, portal_rect)
 
         for pu in self.powerups:
-            img = self.pu_shield_img if pu["type"] == "SHIELD" else self.pu_life_img
+            if pu["type"] == "SHIELD":
+                img = self.pu_shield_img
+            elif pu["type"] == "LIFE":
+                img = self.pu_life_img
+            elif pu["type"] == "BONUS":
+                img = self.pu_bonus_img
+            else: img = None
+            
             if img:
                 canvas.blit(img, (int(pu["x"]), int(pu["y"])))
+            else:
+                color = (0, 255, 255) if pu["type"] == "SHIELD" else (255, 50, 50)
+                center_pos = (int(pu["x"] + pu["size"]/2), int(pu["y"] + pu["size"]/2))
+                pygame.draw.circle(canvas, color, center_pos, pu["size"]//2)
 
         for b in blocks:
             bx = int(b["x"])
@@ -726,18 +784,24 @@ class LevelSession:
             else:
                 pygame.draw.rect(surface, WHITE, (int(b["x"]), int(b["y"]), b["size"], b["size"]))
 
+            if b.get("tracker") == True:
+                center = (int(b["x"] + b["size"] // 2), int(b["y"] + b["size"] // 2))
+                radius = int(b["size"] // 2 + (5 * MIN_SCALE))
+                pygame.draw.circle(canvas, (255, 50, 50), center, radius, 2)
+
             if b["splitter"] and not b["split_done"]:
                 radius = int((b["size"] // 2) + (8 * MIN_SCALE))
                 pygame.draw.circle(canvas, YELLOW, (int(b["x"] + b["size"] // 2), int(b["y"] + b["size"] // 2)), max(1, radius), 3)
 
         if immunity <= 0 or (int(immunity) // 5) % 2 == 0:
             if self.player_image:
-                
                 tilt_angle = player_vx * -2.5
                 rotated_player = pygame.transform.rotate(self.player_image, tilt_angle)
                 player_rect = rotated_player.get_rect(center=(int(px), int(py)))
                 canvas.blit(rotated_player, player_rect)
-
+            else:
+                pygame.draw.circle(surface, GAME_BLUE, (int(px), int(py)), self.player_radius)
+            
             if self.shield_active:
                 pygame.draw.circle(canvas, (0, 200, 255), (int(px), int(py)), self.player_radius + 10, 3)
             
@@ -782,7 +846,6 @@ class LevelSession:
         lives = 3
         immunity_timer = 0
         
-     
         level_flipped = False  
         next_portal_score = 250
 
@@ -793,6 +856,11 @@ class LevelSession:
 
             if immunity_timer > 0:
                 immunity_timer -= 1 * dt_factor
+            
+            if self.shield_active:
+                self.shield_timer -= 1 * dt_factor
+                if self.shield_timer <= 0:
+                    self.shield_active = False
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -886,7 +954,7 @@ class LevelSession:
                 fall_speed = max(-self.start_speed - (score * self.speed_increase), -self.max_fall_speed)
                 level_mode = "up"
 
-            self.update_blocks(blocks, fall_speed, score, level_mode, dt_factor)
+            self.update_blocks(blocks, fall_speed, score, level_mode, dt_factor, x, y)
 
             x = max(self.player_radius, min(SCREEN_WIDTH - self.player_radius, x))
             y = max(self.player_radius, min(SCREEN_HEIGHT - self.player_radius, y))
@@ -894,15 +962,31 @@ class LevelSession:
             player_rect = pygame.Rect(int(x) - self.player_radius, int(y) - self.player_radius, self.player_radius * 2, self.player_radius * 2)
 
             if random.random() < self.powerup_spawn_chance and not portal_active:
-                pu_type = "SHIELD" if random.random() > 0.4 else "LIFE"
-                self.powerups.append({"x": random.randint(50, SCREEN_WIDTH-50), "y": -50, "type": pu_type, "size": int(40*MIN_SCALE)})
+                rand = random.random()
+                if rand > 0.8: pu_type = "BONUS"
+                elif rand > 0.2: pu_type = "SHIELD"
+                else: pu_type = "LIFE"
+                
+                if level_flipped:
+                    start_y = SCREEN_HEIGHT + 50
+                else:
+                    start_y = -50
+                    
+                self.powerups.append({"x": random.randint(50, SCREEN_WIDTH-50), "y": start_y, "type": pu_type, "size": int(40*MIN_SCALE)})
 
             for pu in self.powerups[:]:
                 pu["y"] += fall_speed * dt_factor
                 pu_r = pygame.Rect(pu["x"], pu["y"], pu["size"], pu["size"])
                 if player_rect.colliderect(pu_r):
-                    if pu["type"] == "SHIELD": self.shield_active = True
-                    else: lives = min(lives + 1, 5)
+                    if pu["type"] == "BONUS":
+                        self.bonus_collected += 50
+                        if audio.sfx_enabled: audio.play_sfx(audio_path.heal_sound, 0.5)
+                    if pu["type"] == "SHIELD": 
+                        self.shield_active = True
+                        self.shield_timer = 300 
+                    else: 
+                        lives = min(lives + 1, 4)
+                    
                     if audio.sfx_enabled: audio.play_sfx(audio_path.heal_sound, 0.6)
                     self.powerups.remove(pu)
                 elif pu["y"] > SCREEN_HEIGHT + 100 or pu["y"] < -200:
@@ -928,9 +1012,7 @@ class LevelSession:
                     level_flipped = not level_flipped 
                     next_portal_score += 250         
 
-                   
                     if level_flipped:
-
                         x, y = CENTER_X, int(100 * MIN_SCALE)
                         blocks = self.create_blocks("up")
                     else:
@@ -952,6 +1034,7 @@ class LevelSession:
                 if distance < (self.player_radius + hitbox_radius) and immunity_timer <= 0 and not portal_active:
                     if self.shield_active:
                         self.shield_active = False
+                        self.shield_timer = 0
                         immunity_timer = 60
                         if audio.sfx_enabled:
                             audio.play_sfx(audio_path.hit_sound, 0.3)
@@ -962,18 +1045,23 @@ class LevelSession:
                             audio.play_sfx(audio_path.hit_sound, 0.5)
                             immunity_timer = 90 
                         else:
-                            self.game.last_score = score // 10
+                            self.game.last_base_score = score // 10
+                            self.game.last_bonus = self.bonus_collected
+                            self.game.last_score = (score // 10) + self.bonus_collected
                             pygame.mouse.set_visible(True)
                             return GameState.GAMEOVER
                     break
 
             self.render_frame(screen, blocks, x, y, score, lives, immunity_timer, portal_rect, portal_active, player_vx)
+
 class Game:
     def __init__(self):
         pygame.init()
         pygame.mixer.init()
 
         self.controls = Controls()
+        self.last_base_score = 0
+        self.last_bonus = 0
         self.last_score = 0
         self.menu_background = None
         self.current_skin = "spaceshipp.png"
@@ -994,6 +1082,7 @@ class Game:
         self.sound_screen = SoundScreen(self)
         self.game_over_screen = GameOverScreen(self)
         self.video_screen = VideoScreen(self)
+
 
     def _load_menu_background(self):
         try:
