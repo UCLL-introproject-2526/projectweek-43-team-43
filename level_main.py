@@ -40,7 +40,8 @@ def load_highscore():
         return {
             "level1": {"EASY" : 0, "MEDIUM" : 0, "HARD" : 0},
             "level2": {"EASY" : 0, "MEDIUM" : 0, "HARD" : 0},
-            "level3": {"EASY" : 0, "MEDIUM" : 0, "HARD" : 0}  
+            "level3": {"EASY" : 0, "MEDIUM" : 0, "HARD" : 0},
+            "level4": {"EASY": 0, "MEDIUM": 0, "HARD": 0}  
             }
     with open("highscores.json", "r") as f:
         return json.load(f)
@@ -58,12 +59,13 @@ class GameState(Enum):
     PLAYING_LVL1 = 1
     PLAYING_LVL2 = 2
     PLAYING_LVL3 = 3
-    VIDEO_SETTINGS = 4
+    PLAYING_LVL4 = 4
     SOUND = 5
     CONTROLS = 6
     LEVEL_SELECT = 7
     GAMEOVER = 8
     OPTIONS = 9
+    VIDEO_SETTINGS = 10
 
 class Controls:
     def __init__(self):
@@ -186,6 +188,7 @@ class LevelSelectScreen:
             btn_lvl1 = pygame.Rect(SCREEN_WIDTH//2 - 200, 200, 400, 70)
             btn_lvl2 = pygame.Rect(SCREEN_WIDTH//2 - 200, 300, 400, 70)
             btn_lvl3 = pygame.Rect(SCREEN_WIDTH//2 - 200, 400, 400, 70)
+            btn_lvl4 = pygame.Rect(CENTER_X - 200, 500, 400, 70)
             
             btn_easy = pygame.Rect(SCREEN_WIDTH//2 - 150, 250, 300, 60)
             btn_med = pygame.Rect(SCREEN_WIDTH//2 - 150, 350, 300, 60)
@@ -194,7 +197,7 @@ class LevelSelectScreen:
             if self.selected_level is None:
                 title = self.font.render("KIES EEN LEVEL", True, WHITE)
                 screen.blit(title, (CENTER_X - title.get_width()//2, 100))
-                for btn, txt in [(btn_lvl1, "Level1"), (btn_lvl2, "Level2"), (btn_lvl3, "Level3")]:
+                for btn, txt in [(btn_lvl1, "Level1"), (btn_lvl2, "Level2"), (btn_lvl3, "Level3"), (btn_lvl4, "Level4")]:
                     color = BLUE if btn.collidepoint(mouse_pos) else DARK_GRAY
                     pygame.draw.rect(screen, color, btn, border_radius=15)
                     t = self.font.render(txt, True, WHITE)
@@ -211,12 +214,16 @@ class LevelSelectScreen:
 
             else:
                 current_scores = load_highscore()
-                if self.selected_level == GameState.PLAYING_LVL1: lvl_str = "level1"
-                elif self.selected_level == GameState.PLAYING_LVL2: lvl_str = "level2"
-                else: 
-                    lvl_str = "level3"
+                if self.selected_level == GameState.PLAYING_LVL1: lvl_str = "level 1"
+                elif self.selected_level == GameState.PLAYING_LVL2: lvl_str = "level 2"
+                elif self.selected_level == GameState.PLAYING_LVL3: lvl_str = "level 3"
+                elif self.selected_level == GameState.PLAYING_LVL4: lvl_str = "level 4"
                 
                 score = current_scores[lvl_str][self.current_difficulty]
+
+                txt_hs = self.font.render(f"HIGHSCORE: {score}", True, YELLOW)
+                txt_info = self.font.render(f"{lvl_str.upper()} - {self.current_difficulty}", True, WHITE)
+                txt_start = self.font.render("Klik om te starten!", True, GREEN)
                 
                 screen.blit(self.font.render(f"HIGHSCORE: {score}", True, YELLOW), (CENTER_X - 150, 250))
                 screen.blit(self.font.render(f"{lvl_str.upper()} - {self.current_difficulty}", True, WHITE), (CENTER_X - 150, 320))
@@ -231,6 +238,7 @@ class LevelSelectScreen:
                         if btn_lvl1.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL1
                         elif btn_lvl2.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL2
                         elif btn_lvl3.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL3
+                        elif btn_lvl4.collidepoint(event.pos): self.selected_level = GameState.PLAYING_LVL4
                     
                     elif not self.show_highscore_step:
                         if btn_easy.collidepoint(event.pos): 
@@ -882,13 +890,21 @@ class Game:
                 self.current_playing_level = GameState.PLAYING_LVL3
                 game_state = LevelSession3(self).run(self.screen)
 
+            elif game_state == GameState.PLAYING_LVL4:
+                self.current_playing_level = GameState.PLAYING_LVL4
+                game_state = LevelSession(self, bg_color=(75, 0, 130), player_color=WHITE, block_color=YELLOW).run(self.screen)
+
             elif game_state == GameState.GAMEOVER:
                 if self.current_playing_level == GameState.PLAYING_LVL1:
                     lvl_key = "level1"
                 elif self.current_playing_level == GameState.PLAYING_LVL2:
                     lvl_key = "level2"
+                elif self.current_playing_level == GameState.PLAYING_LVL3:
+                    lvl_key = "level 3"
+                elif self.current_playing_level == GameState.PLAYING_LVL4: 
+                    lvl_key = "level 4"
                 else:
-                    lvl_key = "level3"
+                    lvl_key = "level 1"
                 
                 diff_key = self.level_select_screen.current_difficulty
                 if diff_key: 
