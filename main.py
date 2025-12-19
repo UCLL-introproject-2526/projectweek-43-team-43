@@ -46,6 +46,30 @@ GAME_BLUE = (0, 100, 255)
 
 FONT_SCORE = None
 
+class PowerUpType(Enum):
+    SHIELD = 1
+    EXTRA_LIFE = 2
+
+class PowerUp:
+    def __init__(self, pu_type, x, y, size, image):
+        self.type = pu_type
+        self.x = x
+        self.y = y
+        self.size = size
+        self.image = image
+        self.collected = False
+
+    def update(self, fall_speed, dt_factor):
+        self.y += fall_speed * dt_factor
+
+    def draw(self, surface):
+        if self.image:
+            surface.blit(self.image, (int(self.x), int(self.y)))
+        else:
+            color = GREEN if self.type == PowerUpType.SHIELD else YELLOW
+            pygame.draw.circle(surface, color, (int(self.x + self.size/2), int(self.y + self.size/2)), self.size//2)
+
+
 class GameState(Enum):
     QUIT = -1
     TITLE = 0
@@ -170,7 +194,7 @@ class OptionsScreen(MenuScreenBase):
 class GameOverScreen(MenuScreenBase):
     def build_buttons(self):
         tekst_btn = UIElement((0.5, 0.2), "GAME OVER", 60, RED)
-        score_display = UIElement((0.5, 0.35), f"Jouw Score: {self.game.last_score}", 40, YELLOW)
+        score_display = UIElement((0.5, 0.35), f"Jouw Score: {int(self.game.last_score)}", 40, YELLOW)
         restart_btn = UIElement((0.5, 0.5), "Opnieuw spelen", 30, WHITE, GameState.PLAYING)
         menu_btn = UIElement((0.5, 0.65), "Hoofdmenu", 30, WHITE, GameState.TITLE)
         return RenderUpdates(tekst_btn, score_display, restart_btn, menu_btn)
@@ -429,6 +453,12 @@ class LevelSession:
         self.apply_scaling()
         self.shake_intensity = 0
 
+        self.powerups = []
+        self.powerup_spawn_chance = 0.001 # Kans per frame
+        self.shield_active = False
+        self.pu_shield_img = None
+        self.pu_life_img = None
+
     def apply_scaling(self):
         self.player_radius = max(1, int(20 * MIN_SCALE))
         self.player_max_speed = 11 * MIN_SCALE
@@ -499,12 +529,22 @@ class LevelSession:
         except:
             self.portal_image = None
 
+        try:
+            pu_size = int(40 * MIN_SCALE)
+            self.pu_shield_img = pygame.image.load("images/shield.png").convert_alpha()
+            self.pu_shield_img = pygame.transform.scale(self.pu_shield_img, (pu_size, pu_size))
+            self.pu_life_img = pygame.image.load("images/lives.png").convert_alpha()
+            self.pu_life_img = pygame.transform.scale(self.pu_life_img, (pu_size, pu_size))
+        
+        except:
+            self.pu_shield_img = None
+            self.pu_life_img = None
+
     def make_block(self, current_score, level_mode="down"):
         base_size = random.randint(20, 65)
         size = max(1, int(base_size * MIN_SCALE))
         offset = max(1, int(500 * MIN_SCALE))
 
-        
         if level_mode == "side":
             x = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + offset)
             y = random.randint(0, max(1, SCREEN_HEIGHT - size))
@@ -521,7 +561,6 @@ class LevelSession:
         if current_score > 2500 and random.random() < 0.3:
             is_zigzag = True
 
-
         drift_strength = 1.2 * MIN_SCALE
         
         block_img = None
@@ -536,14 +575,13 @@ class LevelSession:
             else:
                 base_img = self.meteor_large
             
-            
             block_img = pygame.transform.scale(base_img, (size, size))
         
         return {
             "x": float(x),
             "y": float(y),
             "size": size,
-            "image": block_img,  # We slaan de afbeelding op in het blok
+            "image": block_img,
             "splitter": is_splitter,
             "split_done": False,
             "vx": random.uniform(-drift_strength, drift_strength),
@@ -653,6 +691,11 @@ class LevelSession:
         if portal_rect and self.portal_image:
             canvas.blit(self.portal_image, portal_rect)
 
+        for pu in self.powerups:
+            img = self.pu_shield_img if pu["type"] == "SHIELD" else self.pu_life_img
+            if img:
+                canvas.blit(img, (int(pu["x"]), int(pu["y"])))
+
         for b in blocks:
             bx = int(b["x"])
             by = int(b["y"])
@@ -681,11 +724,10 @@ class LevelSession:
                 tilt_angle = player_vx * -2.5
                 rotated_player = pygame.transform.rotate(self.player_image, tilt_angle)
                 player_rect = rotated_player.get_rect(center=(int(px), int(py)))
-
-
                 canvas.blit(rotated_player, player_rect)
-            else:
-                pygame.draw.circle(surface, GAME_BLUE, (int(px), int(py)), self.player_radius)
+
+            if self.shield_active:
+                pygame.draw.circle(canvas, (0, 200, 255), (int(px), int(py)), self.player_radius + 10, 3)
             
         surface.blit(canvas, (offset_x, offset_y))
 
@@ -727,8 +769,10 @@ class LevelSession:
         score = 0
         lives = 3
         immunity_timer = 0
-        level_flipped = False
-        level_side = False
+        
+     
+        level_flipped = False  
+        next_portal_score = 250
 
         while True:
             dt_ms = clock.tick(60) 
@@ -770,9 +814,8 @@ class LevelSession:
                         if event.key == pygame.K_ESCAPE:
                             return GameState.TITLE
 
-            portal1 = ((score // 10) >= 250 and not level_flipped)
-            portal2 = ((score // 10) >= 500 and level_flipped and not level_side)
-            portal_active = portal1 or portal2
+            current_score_int = int(score // 10)
+            portal_active = (current_score_int >= next_portal_score)
 
             keys = pygame.key.get_pressed()
             input_x = 0
@@ -811,8 +854,6 @@ class LevelSession:
             x += player_vx * dt_factor
             y += player_vy * dt_factor
 
-            
-
             if self.bg_images:
                 self.bg_scroll += self.bg_speed * dt_factor
                 if self.bg_scroll >= SCREEN_HEIGHT:
@@ -823,12 +864,9 @@ class LevelSession:
             if not level_flipped:
                 fall_speed = min(self.start_speed + (score * self.speed_increase), self.max_fall_speed)
                 level_mode = "down"
-            elif level_flipped and not level_side:
-                fall_speed = max(-self.start_speed - (score * self.speed_increase), -self.max_fall_speed)
-                level_mode = "up"
             else:
                 fall_speed = max(-self.start_speed - (score * self.speed_increase), -self.max_fall_speed)
-                level_mode = "side"
+                level_mode = "up"
 
             self.update_blocks(blocks, fall_speed, score, level_mode, dt_factor)
 
@@ -837,14 +875,30 @@ class LevelSession:
 
             player_rect = pygame.Rect(int(x) - self.player_radius, int(y) - self.player_radius, self.player_radius * 2, self.player_radius * 2)
 
+            if random.random() < self.powerup_spawn_chance and not portal_active:
+                pu_type = "SHIELD" if random.random() > 0.4 else "LIFE"
+                self.powerups.append({"x": random.randint(50, SCREEN_WIDTH-50), "y": -50, "type": pu_type, "size": int(40*MIN_SCALE)})
+
+            for pu in self.powerups[:]:
+                pu["y"] += fall_speed * dt_factor
+                pu_r = pygame.Rect(pu["x"], pu["y"], pu["size"], pu["size"])
+                if player_rect.colliderect(pu_r):
+                    if pu["type"] == "SHIELD": self.shield_active = True
+                    else: lives = min(lives + 1, 5)
+                    if audio.sfx_enabled: audio.play_sfx(audio_path.heal_sound, 0.6)
+                    self.powerups.remove(pu)
+                elif pu["y"] > SCREEN_HEIGHT + 100 or pu["y"] < -200:
+                    self.powerups.remove(pu)
+
             portal_rect = None
             p_w = max(1, int(200 * MIN_SCALE))
             p_h = max(1, int(40 * MIN_SCALE))
 
-            if portal1:
-                portal_rect = pygame.Rect(int(CENTER_X - (p_w // 2)), int(20 * MIN_SCALE), p_w, p_h)
-            elif portal2:
-                portal_rect = pygame.Rect(int(CENTER_X - (p_w // 2)), SCREEN_HEIGHT - int(40 * MIN_SCALE), p_w, p_h)
+            if portal_active:
+                if not level_flipped:
+                    portal_rect = pygame.Rect(int(CENTER_X - (p_w // 2)), int(20 * MIN_SCALE), p_w, p_h)
+                else:
+                    portal_rect = pygame.Rect(int(CENTER_X - (p_w // 2)), SCREEN_HEIGHT - int(40 * MIN_SCALE), p_w, p_h)
 
             if portal_rect:
                 dx, dy = portal_rect.centerx - x, portal_rect.centery - y
@@ -853,14 +907,18 @@ class LevelSession:
                 player_rect.center = (int(x), int(y))
 
                 if player_rect.colliderect(portal_rect):
-                    if not level_flipped:
-                        level_flipped = True
+                    level_flipped = not level_flipped 
+                    next_portal_score += 250         
+
+                   
+                    if level_flipped:
+
                         x, y = CENTER_X, int(100 * MIN_SCALE)
                         blocks = self.create_blocks("up")
                     else:
-                        level_side = True
-                        x, y = int(100 * MIN_SCALE), CENTER_Y
-                        blocks = self.create_blocks("side")
+                        x, y = CENTER_X, SCREEN_HEIGHT - int(100 * MIN_SCALE)
+                        blocks = self.create_blocks("down")
+                    
                     player_vx, player_vy = 0.0, 0.0
                     continue
 
@@ -874,19 +932,24 @@ class LevelSession:
                 distance = math.hypot(x - planet_center_x, y - planet_center_y)
 
                 if distance < (self.player_radius + hitbox_radius) and immunity_timer <= 0 and not portal_active:
-                    lives -= 1
-                    self.shake_intensity = 15
-                    if lives > 0:
-                        audio.play_sfx(audio_path.hit_sound, 0.5)
-                        immunity_timer = 90 
+                    if self.shield_active:
+                        self.shield_active = False
+                        immunity_timer = 60
+                        if audio.sfx_enabled:
+                            audio.play_sfx(audio_path.hit_sound, 0.3)
                     else:
-                        self.game.last_score = score // 10
-                        pygame.mouse.set_visible(True)
-                        return GameState.GAMEOVER
+                        lives -= 1
+                        self.shake_intensity = 15
+                        if lives > 0:
+                            audio.play_sfx(audio_path.hit_sound, 0.5)
+                            immunity_timer = 90 
+                        else:
+                            self.game.last_score = score // 10
+                            pygame.mouse.set_visible(True)
+                            return GameState.GAMEOVER
                     break
 
             self.render_frame(screen, blocks, x, y, score, lives, immunity_timer, portal_rect, portal_active, player_vx)
-
 class Game:
     def __init__(self):
         pygame.init()
