@@ -424,6 +424,7 @@ class LevelSession:
     def __init__(self, game):
         self.game = game
         self.player_image = None
+        self.player_image_flipped = None
         self.background_image = None
         self.meteor_small = None
         self.meteor_medium = None
@@ -434,9 +435,16 @@ class LevelSession:
         self.score_surface = None
 
         self.bg_scroll = 0
-        self.bg_speed = 1
-        self.current_bg_index = 0
+        self.bg_scroll2 = 0
+        
+       
+        self.bg_speed = 1    
+        self.bg_speed2 = 4
+       
+
         self.bg_images = []
+        self.bg_images2 = []
+        self.current_bg_index = 0
 
         self.block_count = 4
         self.player_radius = 0
@@ -454,11 +462,13 @@ class LevelSession:
         self.shake_intensity = 0
 
         self.powerups = []
-        self.powerup_spawn_chance = 0.004 
+        self.powerup_spawn_chance = 0.003
         self.shield_active = False
         self.shield_timer = 0
         self.pu_shield_img = None
         self.pu_life_img = None
+
+        self.canvas = pygame.Surface(SCREEN_SIZE)
 
     def apply_scaling(self):
         self.player_radius = max(1, int(20 * MIN_SCALE))
@@ -486,15 +496,24 @@ class LevelSession:
         try:
             self.player_image = pygame.image.load(f"images/{self.game.current_skin}").convert_alpha()
             self.player_image = pygame.transform.scale(self.player_image, (final_pixel_size, final_pixel_size))
+           
+            self.player_image_flipped = pygame.transform.flip(self.player_image, False, True)
+            
         except:
             self.player_image = None
+            self.player_image_flipped = None
 
         self.bg_images = []
+        self.bg_images2 = []
         for i in range(1, 5):
             try:
                 img = pygame.image.load(f"images/bgob{i}.png").convert()
                 img = pygame.transform.scale(img, SCREEN_SIZE)
                 self.bg_images.append(img)
+
+                img_stars = pygame.image.load("images/stars.png").convert_alpha()
+                img_stars = pygame.transform.scale(img_stars, SCREEN_SIZE)
+                self.bg_images2.append(img_stars)
             except:
                 pass
         self.bg_scroll = 0
@@ -561,10 +580,8 @@ class LevelSession:
 
         if random.random() < 0.10:
             is_splitter = True
-        
         elif (current_score // 10) >= 500 and random.random() < 0.30:
             is_tracker = True
-        
         elif current_score > 2500 and random.random() < 0.3:
             is_zigzag = True
 
@@ -662,7 +679,6 @@ class LevelSession:
                 else:
                     block["x"] += golf
 
-            # Tracker logic
             if block.get("tracker") == True:
                 block_center_x = block["x"] + block["size"] / 2
                 block_center_y = block["y"] + block["size"] / 2
@@ -704,7 +720,7 @@ class LevelSession:
         if len(blocks) < self.block_count + extra_planeten:
             blocks.append(self.make_block(current_score, level_mode))
 
-    def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active, player_vx):
+    def render_frame(self, surface, blocks, px, py, score, lives, immunity, portal_rect, portal_active, player_vx, level_flipped):
         
         offset_x = 0
         offset_y = 0
@@ -712,31 +728,43 @@ class LevelSession:
             offset_x = random.randint(-self.shake_intensity, self.shake_intensity)
             offset_y = random.randint(-self.shake_intensity, self.shake_intensity)
             self.shake_intensity = max(0, self.shake_intensity - 1)
-        canvas = pygame.Surface(SCREEN_SIZE)
-        canvas.fill(BLACK)
+        
+        self.canvas.fill(BLACK) 
 
         if self.bg_images:
-            self.bg_scroll += self.bg_speed
-            if self.bg_scroll >= SCREEN_HEIGHT:
-                self.bg_scroll = 0
-                self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
-            next_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
-            canvas.blit(self.bg_images[self.current_bg_index], (0, self.bg_scroll))
-            canvas.blit(self.bg_images[next_bg_index], (0, self.bg_scroll - SCREEN_HEIGHT))
+            curr_img = self.bg_images[self.current_bg_index]
+            self.canvas.blit(curr_img, (0, self.bg_scroll))
+            
+            if self.bg_scroll > 0:
+                nxt_idx = (self.current_bg_index + 1) % len(self.bg_images)
+                self.canvas.blit(self.bg_images[nxt_idx], (0, self.bg_scroll - SCREEN_HEIGHT))
+            elif self.bg_scroll < 0:
+                prev_idx = (self.current_bg_index - 1) % len(self.bg_images)
+                self.canvas.blit(self.bg_images[prev_idx], (0, self.bg_scroll + SCREEN_HEIGHT))
+
+        if self.bg_images2:
+            curr_stars = self.bg_images2[0]
+            self.canvas.blit(curr_stars, (0, self.bg_scroll2))
+            
+            if self.bg_scroll2 > 0:
+                self.canvas.blit(curr_stars, (0, self.bg_scroll2 - SCREEN_HEIGHT))
+            elif self.bg_scroll2 < 0:
+                self.canvas.blit(curr_stars, (0, self.bg_scroll2 + SCREEN_HEIGHT))
+        
         elif self.background_image:
-            canvas.blit(self.background_image, (0, 0))
+            self.canvas.blit(self.background_image, (0, 0))
 
         if portal_rect and self.portal_image:
-            canvas.blit(self.portal_image, portal_rect)
+            self.canvas.blit(self.portal_image, portal_rect)
 
         for pu in self.powerups:
             img = self.pu_shield_img if pu["type"] == "SHIELD" else self.pu_life_img
             if img:
-                canvas.blit(img, (int(pu["x"]), int(pu["y"])))
+                self.canvas.blit(img, (int(pu["x"]), int(pu["y"])))
             else:
                 color = (0, 255, 255) if pu["type"] == "SHIELD" else (255, 50, 50)
                 center_pos = (int(pu["x"] + pu["size"]/2), int(pu["y"] + pu["size"]/2))
-                pygame.draw.circle(canvas, color, center_pos, pu["size"]//2)
+                pygame.draw.circle(self.canvas, color, center_pos, pu["size"]//2)
 
         for b in blocks:
             bx = int(b["x"])
@@ -752,32 +780,39 @@ class LevelSession:
                 else: b["image"] = None
 
             if b.get("image"):
-                canvas.blit(b["image"], (bx, by))
+                self.canvas.blit(b["image"], (bx, by))
             else:
                 pygame.draw.rect(surface, WHITE, (int(b["x"]), int(b["y"]), b["size"], b["size"]))
 
             if b.get("tracker") == True:
                 center = (int(b["x"] + b["size"] // 2), int(b["y"] + b["size"] // 2))
                 radius = int(b["size"] // 2 + (5 * MIN_SCALE))
-                pygame.draw.circle(canvas, (255, 50, 50), center, radius, 2)
+                pygame.draw.circle(self.canvas, (255, 50, 50), center, radius, 2)
 
             if b["splitter"] and not b["split_done"]:
                 radius = int((b["size"] // 2) + (8 * MIN_SCALE))
-                pygame.draw.circle(canvas, YELLOW, (int(b["x"] + b["size"] // 2), int(b["y"] + b["size"] // 2)), max(1, radius), 3)
+                pygame.draw.circle(self.canvas, YELLOW, (int(b["x"] + b["size"] // 2), int(b["y"] + b["size"] // 2)), max(1, radius), 3)
 
         if immunity <= 0 or (int(immunity) // 5) % 2 == 0:
             if self.player_image:
-                tilt_angle = player_vx * -2.5
-                rotated_player = pygame.transform.rotate(self.player_image, tilt_angle)
+                if level_flipped and self.player_image_flipped:
+                    img_to_draw = self.player_image_flipped
+                    tilt_angle = -(player_vx * -2.5) 
+                else:
+                    img_to_draw = self.player_image
+                    tilt_angle = player_vx * -2.5
+
+                rotated_player = pygame.transform.rotozoom(img_to_draw, tilt_angle, 1.0)
+                
                 player_rect = rotated_player.get_rect(center=(int(px), int(py)))
-                canvas.blit(rotated_player, player_rect)
+                self.canvas.blit(rotated_player, player_rect)
             else:
                 pygame.draw.circle(surface, GAME_BLUE, (int(px), int(py)), self.player_radius)
             
             if self.shield_active:
-                pygame.draw.circle(canvas, (0, 200, 255), (int(px), int(py)), self.player_radius + 10, 3)
+                pygame.draw.circle(self.canvas, (0, 200, 255), (int(px), int(py)), self.player_radius + 10, 3)
             
-        surface.blit(canvas, (offset_x, offset_y))
+        surface.blit(self.canvas, (offset_x, offset_y))
 
         current_display_score = int(score // 10)
         
@@ -824,6 +859,9 @@ class LevelSession:
         while True:
             dt_ms = clock.tick(60) 
             dt = dt_ms / 1000.0 
+            
+            if dt > 0.1: dt = 0.1 
+            
             dt_factor = dt * 60
 
             if immunity_timer > 0:
@@ -850,6 +888,9 @@ class LevelSession:
                     self.game.screen = pygame.display.set_mode(event.size, pygame.RESIZABLE)
                     screen = self.game.screen
                     recalc_display_metrics(screen)
+                    
+                    self.canvas = pygame.Surface(SCREEN_SIZE)
+                    
                     self.game._load_menu_background()
                     self.apply_scaling()
                     self.load_assets()
@@ -907,10 +948,29 @@ class LevelSession:
             y += player_vy * dt_factor
 
             if self.bg_images:
-                self.bg_scroll += self.bg_speed * dt_factor
-                if self.bg_scroll >= SCREEN_HEIGHT:
-                    self.bg_scroll = 0
-                    self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+                scroll_delta = self.bg_speed * dt_factor
+                if not level_flipped:
+                    self.bg_scroll += scroll_delta
+                    if self.bg_scroll >= SCREEN_HEIGHT:
+                        self.bg_scroll = 0
+                        self.current_bg_index = (self.current_bg_index + 1) % len(self.bg_images)
+                else:
+                    self.bg_scroll -= scroll_delta
+                    if self.bg_scroll <= -SCREEN_HEIGHT:
+                        self.bg_scroll = 0
+                        self.current_bg_index = (self.current_bg_index - 1) % len(self.bg_images)
+
+            if self.bg_images2:
+                scroll_delta2 = self.bg_speed2 * dt_factor
+                if not level_flipped:
+                    self.bg_scroll2 += scroll_delta2
+                    if self.bg_scroll2 >= SCREEN_HEIGHT:
+                        self.bg_scroll2 = 0
+                else:
+                    self.bg_scroll2 -= scroll_delta2
+                    if self.bg_scroll2 <= -SCREEN_HEIGHT:
+                        self.bg_scroll2 = 0
+
             score += 1 * dt_factor
 
             if not level_flipped:
@@ -1010,7 +1070,7 @@ class LevelSession:
                             return GameState.GAMEOVER
                     break
 
-            self.render_frame(screen, blocks, x, y, score, lives, immunity_timer, portal_rect, portal_active, player_vx)
+            self.render_frame(screen, blocks, x, y, score, lives, immunity_timer, portal_rect, portal_active, player_vx, level_flipped)
 
 class Game:
     def __init__(self):
@@ -1122,4 +1182,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
 
