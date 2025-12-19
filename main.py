@@ -454,7 +454,7 @@ class LevelSession:
         self.shake_intensity = 0
 
         self.powerups = []
-        self.powerup_spawn_chance = 0.005 # Kans per frame
+        self.powerup_spawn_chance = 0.001 # Kans per frame
         self.shield_active = False
         self.pu_shield_img = None
         self.pu_life_img = None
@@ -545,7 +545,6 @@ class LevelSession:
         size = max(1, int(base_size * MIN_SCALE))
         offset = max(1, int(500 * MIN_SCALE))
 
-        
         if level_mode == "side":
             x = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + offset)
             y = random.randint(0, max(1, SCREEN_HEIGHT - size))
@@ -562,7 +561,6 @@ class LevelSession:
         if current_score > 2500 and random.random() < 0.3:
             is_zigzag = True
 
-
         drift_strength = 1.2 * MIN_SCALE
         
         block_img = None
@@ -577,14 +575,13 @@ class LevelSession:
             else:
                 base_img = self.meteor_large
             
-            
             block_img = pygame.transform.scale(base_img, (size, size))
         
         return {
             "x": float(x),
             "y": float(y),
             "size": size,
-            "image": block_img,  # We slaan de afbeelding op in het blok
+            "image": block_img,
             "splitter": is_splitter,
             "split_done": False,
             "vx": random.uniform(-drift_strength, drift_strength),
@@ -772,8 +769,10 @@ class LevelSession:
         score = 0
         lives = 3
         immunity_timer = 0
-        level_flipped = False
-        level_side = False
+        
+     
+        level_flipped = False  
+        next_portal_score = 250
 
         while True:
             dt_ms = clock.tick(60) 
@@ -815,9 +814,8 @@ class LevelSession:
                         if event.key == pygame.K_ESCAPE:
                             return GameState.TITLE
 
-            portal1 = ((score // 10) >= 250 and not level_flipped)
-            portal2 = ((score // 10) >= 500 and level_flipped and not level_side)
-            portal_active = portal1 or portal2
+            current_score_int = int(score // 10)
+            portal_active = (current_score_int >= next_portal_score)
 
             keys = pygame.key.get_pressed()
             input_x = 0
@@ -856,8 +854,6 @@ class LevelSession:
             x += player_vx * dt_factor
             y += player_vy * dt_factor
 
-            
-
             if self.bg_images:
                 self.bg_scroll += self.bg_speed * dt_factor
                 if self.bg_scroll >= SCREEN_HEIGHT:
@@ -868,12 +864,9 @@ class LevelSession:
             if not level_flipped:
                 fall_speed = min(self.start_speed + (score * self.speed_increase), self.max_fall_speed)
                 level_mode = "down"
-            elif level_flipped and not level_side:
-                fall_speed = max(-self.start_speed - (score * self.speed_increase), -self.max_fall_speed)
-                level_mode = "up"
             else:
                 fall_speed = max(-self.start_speed - (score * self.speed_increase), -self.max_fall_speed)
-                level_mode = "side"
+                level_mode = "up"
 
             self.update_blocks(blocks, fall_speed, score, level_mode, dt_factor)
 
@@ -901,10 +894,11 @@ class LevelSession:
             p_w = max(1, int(200 * MIN_SCALE))
             p_h = max(1, int(40 * MIN_SCALE))
 
-            if portal1:
-                portal_rect = pygame.Rect(int(CENTER_X - (p_w // 2)), int(20 * MIN_SCALE), p_w, p_h)
-            elif portal2:
-                portal_rect = pygame.Rect(int(CENTER_X - (p_w // 2)), SCREEN_HEIGHT - int(40 * MIN_SCALE), p_w, p_h)
+            if portal_active:
+                if not level_flipped:
+                    portal_rect = pygame.Rect(int(CENTER_X - (p_w // 2)), int(20 * MIN_SCALE), p_w, p_h)
+                else:
+                    portal_rect = pygame.Rect(int(CENTER_X - (p_w // 2)), SCREEN_HEIGHT - int(40 * MIN_SCALE), p_w, p_h)
 
             if portal_rect:
                 dx, dy = portal_rect.centerx - x, portal_rect.centery - y
@@ -913,14 +907,18 @@ class LevelSession:
                 player_rect.center = (int(x), int(y))
 
                 if player_rect.colliderect(portal_rect):
-                    if not level_flipped:
-                        level_flipped = True
+                    level_flipped = not level_flipped 
+                    next_portal_score += 250         
+
+                   
+                    if level_flipped:
+
                         x, y = CENTER_X, int(100 * MIN_SCALE)
                         blocks = self.create_blocks("up")
                     else:
-                        level_side = True
-                        x, y = int(100 * MIN_SCALE), CENTER_Y
-                        blocks = self.create_blocks("side")
+                        x, y = CENTER_X, SCREEN_HEIGHT - int(100 * MIN_SCALE)
+                        blocks = self.create_blocks("down")
+                    
                     player_vx, player_vy = 0.0, 0.0
                     continue
 
@@ -952,7 +950,6 @@ class LevelSession:
                     break
 
             self.render_frame(screen, blocks, x, y, score, lives, immunity_timer, portal_rect, portal_active, player_vx)
-
 class Game:
     def __init__(self):
         pygame.init()
